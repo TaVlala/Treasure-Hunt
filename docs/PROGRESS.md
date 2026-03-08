@@ -32,7 +32,7 @@
 - [x] Clue CRUD (admin)
 - [x] Sponsor CRUD (admin)
 - [x] GPS proximity check endpoint
-- [ ] Game session: join hunt
+- [x] Game session: join hunt
 - [ ] Game session: check proximity / scan QR / submit answer
 - [ ] Player progress tracking
 - [ ] Basic leaderboard endpoint

@@ -14,11 +14,11 @@ hunt tickets, and tourism board contracts.
 
 ## Current Phase: Phase 1 MVP — Infrastructure
 
-**Status:** GPS proximity check endpoint complete. POST /api/v1/game/proximity-check returns distanceMeters, radiusMeters, withinRange using PostGIS ST_DWithin with Haversine JS fallback when geography column is null.
-Next: Game session join hunt.
+**Status:** Game session join complete. POST /api/v1/game/sessions creates GameSession + PlayerProgress records in a transaction (first clue UNLOCKED). Returns session + first clue.
+Next: Game session submit answer / check proximity / scan QR.
 
-**Last completed chunk:** Chunk 1G — GPS proximity check (POST /api/v1/game/proximity-check, authenticate middleware, PostGIS + Haversine fallback).
-**Next chunk:** Chunk 1H — Game session: join hunt (POST /api/v1/game/sessions).
+**Last completed chunk:** Chunk 1H — Join hunt (POST /api/v1/game/sessions, transaction, first clue UNLOCKED).
+**Next chunk:** Chunk 1I — Game session submit: check proximity / scan QR / submit answer → marks clue FOUND, unlocks next.
 
 **Known fix:** Express 5 `ParamsDictionary` types named params as `string | string[]` — always extract with `req.params['key'] as string` in route handlers.
 
