@@ -16,16 +16,16 @@
 - [x] Monorepo setup (Turborepo + workspaces)
 - [x] Shared types package
 - [x] Environment config (.env.example)
-- [ ] Database setup (PostgreSQL + PostGIS)
-- [ ] Prisma schema + initial migration
-- [ ] Seed data (demo hunt, clues, sponsor)
+- [x] Database setup (PostgreSQL + PostGIS)
+- [x] Prisma schema + initial migration
+- [x] Seed data (demo hunt, clues, sponsor)
 
 ### Backend API (Server)
 - [x] Express server boilerplate with TypeScript
 - [x] Error handling middleware (AppError class + global handler)
 - [x] Request validation setup (Zod — env validation working)
 - [x] Health check endpoint (GET /health)
-- [ ] Database connection + Prisma client
+- [x] Database connection + Prisma client
 - [ ] Auth: register + login + JWT + refresh tokens
 - [ ] Auth middleware (authenticate + requireRole)
 - [ ] Hunt CRUD (admin)

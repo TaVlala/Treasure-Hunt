@@ -14,11 +14,11 @@ hunt tickets, and tourism board contracts.
 
 ## Current Phase: Phase 1 MVP — Infrastructure
 
-**Status:** Monorepo scaffolding complete. Express server running with health check.
-Next: Prisma database schema + connection, then auth endpoints.
+**Status:** Prisma schema + DB connection complete. Server starts cleanly, Prisma client wired in with graceful shutdown.
+Next: Auth endpoints (register, login, JWT, refresh tokens).
 
-**Last completed chunk:** Chunk 1A — Monorepo root + shared types + Express server boilerplate.
-**Next chunk:** Chunk 1B — Prisma schema + database connection (start new session).
+**Last completed chunk:** Chunk 1B — Prisma schema + database connection.
+**Next chunk:** Chunk 1C — Auth endpoints (register + login + JWT + refresh tokens).
 
 ## Key Architectural Decisions
 
