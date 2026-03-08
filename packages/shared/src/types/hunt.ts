@@ -61,6 +61,7 @@ export interface HuntDetail extends Hunt {
   clueCount: number;
 }
 
+// Player-safe clue shape — does NOT include the answer field
 export interface Clue {
   id: string;
   huntId: string;
@@ -76,4 +77,10 @@ export interface Clue {
   isBonus: boolean;
   points: number;
   unlockMessage: string | null;
+  createdAt: string;
+}
+
+// Admin-only clue shape — includes the answer (not exposed to players)
+export interface AdminClue extends Clue {
+  answer: string | null;
 }

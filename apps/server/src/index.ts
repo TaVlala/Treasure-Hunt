@@ -13,6 +13,7 @@ import cookieParser from 'cookie-parser';
 import healthRouter from './routes/health.routes';
 import authRouter from './routes/auth.routes';
 import huntAdminRouter from './routes/hunt.admin.routes';
+import clueAdminRouter from './routes/clue.admin.routes';
 import { errorHandler } from './middleware/errorHandler';
 
 const app = express();
@@ -43,6 +44,9 @@ app.use('/api/v1/auth', authRouter);
 
 // Hunt admin CRUD (requires admin JWT)
 app.use('/api/v1/admin/hunts', huntAdminRouter);
+
+// Clue admin CRUD — nested under hunts; :huntId param is merged via mergeParams: true
+app.use('/api/v1/admin/hunts/:huntId/clues', clueAdminRouter);
 
 // --- Error handling ---
 
