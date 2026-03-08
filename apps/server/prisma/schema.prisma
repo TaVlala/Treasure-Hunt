@@ -1,0 +1,455 @@
+// Full Prisma schema for Treasure Hunt platform.
+// PostGIS geography columns use Unsupported() — geospatial queries must use $queryRaw / $executeRaw.
+// Run `npm run prisma:migrate` to apply (requires PostGIS extension — see README).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  ADMIN
+  PLAYER
+}
+
+enum HuntDifficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum HuntTheme {
+  GENERAL
+  CHRISTMAS
+  HALLOWEEN
+  SUMMER
+  FESTIVAL
+  CUSTOM
+}
+
+enum HuntType {
+  FREE
+  PAID
+}
+
+enum TeamMode {
+  SOLO
+  TEAM
+  BOTH
+}
+
+enum HuntStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ARCHIVED
+}
+
+enum ClueType {
+  TEXT_RIDDLE
+  IMAGE
+  GPS_PROXIMITY
+  QR_CODE
+  PHOTO_CHALLENGE
+}
+
+enum SponsorTier {
+  BASIC
+  FEATURED
+  PRIZE
+}
+
+enum SponsorStatus {
+  ACTIVE
+  PAUSED
+  EXPIRED
+}
+
+enum PrizeType {
+  DISCOUNT
+  FREE_ITEM
+  EXPERIENCE
+  GIFT_CARD
+  MERCH
+}
+
+enum SessionStatus {
+  ACTIVE
+  COMPLETED
+  ABANDONED
+  TIMED_OUT
+}
+
+enum ProgressStatus {
+  LOCKED
+  UNLOCKED
+  FOUND
+  SKIPPED
+}
+
+enum FoundMethod {
+  GPS
+  QR_CODE
+  ANSWER
+}
+
+enum RedemptionStatus {
+  GENERATED
+  REDEEMED
+  EXPIRED
+}
+
+enum PaymentType {
+  SPONSOR_FEE
+  TICKET_PURCHASE
+}
+
+enum PayerType {
+  SPONSOR
+  PLAYER
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+// ---------------------------------------------------------------------------
+// Models
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email         String    @unique @db.VarChar(255)
+  passwordHash  String    @map("password_hash") @db.VarChar(255)
+  role          UserRole  @default(PLAYER)
+  displayName   String    @map("display_name") @db.VarChar(100)
+  avatarUrl     String?   @map("avatar_url") @db.VarChar(500)
+  homeCity      String?   @map("home_city") @db.VarChar(100)
+  isActive      Boolean   @default(true) @map("is_active")
+  lastLoginAt   DateTime? @map("last_login_at") @db.Timestamptz()
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+
+  huntsCreated    Hunt[]
+  gameSessions    GameSession[]
+  teamsCreated    Team[]
+  teamMembers     TeamMember[]
+  redemptions     Redemption[]
+  analyticsEvents AnalyticsEvent[]
+
+  @@map("users")
+}
+
+model Hunt {
+  id               String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title            String         @db.VarChar(200)
+  slug             String         @unique @db.VarChar(200)
+  description      String         @db.Text
+  city             String         @db.VarChar(100)
+  region           String?        @db.VarChar(100)
+  difficulty       HuntDifficulty
+  theme            HuntTheme      @default(GENERAL)
+  huntType         HuntType       @default(FREE) @map("hunt_type")
+  ticketPriceCents Int?           @map("ticket_price_cents")
+  currency         String         @default("USD") @db.VarChar(3)
+  timeLimitMinutes Int?           @map("time_limit_minutes")
+  maxPlayers       Int?           @map("max_players")
+  teamMode         TeamMode       @default(BOTH) @map("team_mode")
+  maxTeamSize      Int            @default(4) @map("max_team_size")
+  status           HuntStatus     @default(DRAFT)
+  startsAt         DateTime?      @map("starts_at") @db.Timestamptz()
+  endsAt           DateTime?      @map("ends_at") @db.Timestamptz()
+  thumbnailUrl     String?        @map("thumbnail_url") @db.VarChar(500)
+  coverImageUrl    String?        @map("cover_image_url") @db.VarChar(500)
+
+  // White-label branding
+  whitelabelName    String? @map("whitelabel_name") @db.VarChar(200)
+  whitelabelLogoUrl String? @map("whitelabel_logo_url") @db.VarChar(500)
+  whitelabelColor   String? @map("whitelabel_color") @db.VarChar(7)
+
+  // Map center + zoom
+  centerLat Decimal @map("center_lat") @db.Decimal(10, 8)
+  centerLng Decimal @map("center_lng") @db.Decimal(11, 8)
+  zoomLevel Int     @default(14) @map("zoom_level")
+
+  // SEO
+  metaTitle       String? @map("meta_title") @db.VarChar(200)
+  metaDescription String? @map("meta_description") @db.VarChar(500)
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  creator         User             @relation(fields: [createdBy], references: [id])
+  clues           Clue[]
+  gameSessions    GameSession[]
+  teams           Team[]
+  sponsorPrizes   SponsorPrize[]
+  payments        Payment[]
+  analyticsEvents AnalyticsEvent[]
+
+  @@index([city])
+  @@index([status])
+  @@index([slug])
+  @@map("hunts")
+}
+
+model Clue {
+  id                    String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  huntId                String   @map("hunt_id") @db.Uuid
+  orderIndex            Int      @map("order_index")
+  title                 String   @db.VarChar(200)
+  description           String   @db.Text
+  hintText              String?  @map("hint_text") @db.Text
+  clueType              ClueType @map("clue_type")
+  answer                String?  @db.VarChar(500)
+  imageUrl              String?  @map("image_url") @db.VarChar(500)
+  latitude              Decimal  @db.Decimal(10, 8)
+  longitude             Decimal  @db.Decimal(11, 8)
+  // PostGIS point — set via $executeRaw after insert; not writable through Prisma Client
+  location              Unsupported("geography(Point, 4326)")?
+  proximityRadiusMeters Int      @default(50) @map("proximity_radius_meters")
+  isBonus               Boolean  @default(false) @map("is_bonus")
+  points                Int      @default(10)
+  unlockMessage         String?  @map("unlock_message") @db.Text
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  hunt            Hunt             @relation(fields: [huntId], references: [id], onDelete: Cascade)
+  sponsorClue     SponsorClue?
+  playerProgress  PlayerProgress[]
+  analyticsEvents AnalyticsEvent[]
+
+  @@unique([huntId, orderIndex])
+  @@index([huntId])
+  @@map("clues")
+}
+
+model Sponsor {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessName    String        @map("business_name") @db.VarChar(200)
+  contactName     String?       @map("contact_name") @db.VarChar(100)
+  contactEmail    String?       @map("contact_email") @db.VarChar(255)
+  contactPhone    String?       @map("contact_phone") @db.VarChar(50)
+  websiteUrl      String?       @map("website_url") @db.VarChar(500)
+  logoUrl         String?       @map("logo_url") @db.VarChar(500)
+  description     String?       @db.Text
+  address         String        @db.Text
+  latitude        Decimal       @db.Decimal(10, 8)
+  longitude       Decimal       @db.Decimal(11, 8)
+  // PostGIS point — set via $executeRaw after insert; not writable through Prisma Client
+  location        Unsupported("geography(Point, 4326)")?
+  tier            SponsorTier   @default(BASIC)
+  status          SponsorStatus @default(ACTIVE)
+  contractStart   DateTime?     @map("contract_start") @db.Date
+  contractEnd     DateTime?     @map("contract_end") @db.Date
+  monthlyFeeCents Int?          @map("monthly_fee_cents")
+  notes           String?       @db.Text
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz()
+
+  sponsorClues    SponsorClue[]
+  sponsorPrizes   SponsorPrize[]
+  analyticsEvents AnalyticsEvent[]
+
+  @@map("sponsors")
+}
+
+model SponsorClue {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sponsorId      String   @map("sponsor_id") @db.Uuid
+  clueId         String   @unique @map("clue_id") @db.Uuid
+  brandedMessage String?  @map("branded_message") @db.Text
+  offerText      String?  @map("offer_text") @db.VarChar(500)
+  brandingColor  String?  @map("branding_color") @db.VarChar(7)
+  callToAction   String?  @map("call_to_action") @db.VarChar(200)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  sponsor Sponsor @relation(fields: [sponsorId], references: [id], onDelete: Cascade)
+  clue    Clue    @relation(fields: [clueId], references: [id], onDelete: Cascade)
+
+  @@map("sponsor_clues")
+}
+
+model SponsorPrize {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sponsorId        String    @map("sponsor_id") @db.Uuid
+  huntId           String    @map("hunt_id") @db.Uuid
+  title            String    @db.VarChar(200)
+  description      String?   @db.Text
+  prizeType        PrizeType @map("prize_type")
+  valueDescription String?   @map("value_description") @db.VarChar(200)
+  redemptionLimit  Int?      @map("redemption_limit")
+  redemptionsUsed  Int       @default(0) @map("redemptions_used")
+  expiryDate       DateTime? @map("expiry_date") @db.Date
+  termsConditions  String?   @map("terms_conditions") @db.Text
+  imageUrl         String?   @map("image_url") @db.VarChar(500)
+  isGrandPrize     Boolean   @default(false) @map("is_grand_prize")
+  minCluesFound    Int       @default(0) @map("min_clues_found")
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+
+  sponsor     Sponsor      @relation(fields: [sponsorId], references: [id], onDelete: Cascade)
+  hunt        Hunt         @relation(fields: [huntId], references: [id], onDelete: Cascade)
+  redemptions Redemption[]
+
+  @@map("sponsor_prizes")
+}
+
+model GameSession {
+  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  huntId        String        @map("hunt_id") @db.Uuid
+  playerId      String        @map("player_id") @db.Uuid
+  teamId        String?       @map("team_id") @db.Uuid
+  status        SessionStatus @default(ACTIVE)
+  startedAt     DateTime      @default(now()) @map("started_at") @db.Timestamptz()
+  completedAt   DateTime?     @map("completed_at") @db.Timestamptz()
+  score         Int           @default(0)
+  cluesFound    Int           @default(0) @map("clues_found")
+  totalClues    Int           @map("total_clues")
+  timeTakenSecs Int?          @map("time_taken_secs")
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz()
+
+  hunt            Hunt             @relation(fields: [huntId], references: [id])
+  player          User             @relation(fields: [playerId], references: [id])
+  team            Team?            @relation(fields: [teamId], references: [id])
+  progress        PlayerProgress[]
+  redemptions     Redemption[]
+  payments        Payment[]
+  analyticsEvents AnalyticsEvent[]
+
+  @@unique([huntId, playerId])
+  @@index([huntId])
+  @@index([playerId])
+  @@map("game_sessions")
+}
+
+model PlayerProgress {
+  id           String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId    String         @map("session_id") @db.Uuid
+  clueId       String         @map("clue_id") @db.Uuid
+  status       ProgressStatus @default(LOCKED)
+  foundAt      DateTime?      @map("found_at") @db.Timestamptz()
+  method       FoundMethod?
+  pointsEarned Int            @default(0) @map("points_earned")
+  hintUsed     Boolean        @default(false) @map("hint_used")
+  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz()
+
+  session GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  clue    Clue        @relation(fields: [clueId], references: [id])
+
+  @@unique([sessionId, clueId])
+  @@map("player_progress")
+}
+
+model Team {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name       String   @db.VarChar(100)
+  huntId     String   @map("hunt_id") @db.Uuid
+  inviteCode String   @unique @map("invite_code") @db.VarChar(8)
+  maxMembers Int      @default(4) @map("max_members")
+  createdBy  String   @map("created_by") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  hunt         Hunt          @relation(fields: [huntId], references: [id])
+  creator      User          @relation(fields: [createdBy], references: [id])
+  members      TeamMember[]
+  gameSessions GameSession[]
+
+  @@map("teams")
+}
+
+model TeamMember {
+  id       String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  teamId   String   @map("team_id") @db.Uuid
+  userId   String   @map("user_id") @db.Uuid
+  joinedAt DateTime @default(now()) @map("joined_at") @db.Timestamptz()
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([teamId, userId])
+  @@map("team_members")
+}
+
+model Redemption {
+  id         String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  prizeId    String           @map("prize_id") @db.Uuid
+  playerId   String           @map("player_id") @db.Uuid
+  sessionId  String           @map("session_id") @db.Uuid
+  qrCode     String           @unique @map("qr_code") @db.VarChar(100)
+  status     RedemptionStatus @default(GENERATED)
+  redeemedAt DateTime?        @map("redeemed_at") @db.Timestamptz()
+  redeemedBy String?          @map("redeemed_by") @db.VarChar(100)
+  expiresAt  DateTime         @map("expires_at") @db.Timestamptz()
+  createdAt  DateTime         @default(now()) @map("created_at") @db.Timestamptz()
+
+  prize   SponsorPrize @relation(fields: [prizeId], references: [id])
+  player  User         @relation(fields: [playerId], references: [id])
+  session GameSession  @relation(fields: [sessionId], references: [id])
+
+  @@index([qrCode])
+  @@map("redemptions")
+}
+
+model Payment {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  paymentType     PaymentType   @map("payment_type")
+  payerType       PayerType     @map("payer_type")
+  payerId         String        @map("payer_id") @db.Uuid
+  amountCents     Int           @map("amount_cents")
+  currency        String        @default("USD") @db.VarChar(3)
+  stripePaymentId String?       @map("stripe_payment_id") @db.VarChar(200)
+  stripeInvoiceId String?       @map("stripe_invoice_id") @db.VarChar(200)
+  status          PaymentStatus @default(PENDING)
+  description     String?       @db.VarChar(500)
+  metadata        Json?
+  huntId          String?       @map("hunt_id") @db.Uuid
+  sessionId       String?       @map("session_id") @db.Uuid
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz()
+
+  hunt    Hunt?        @relation(fields: [huntId], references: [id])
+  session GameSession? @relation(fields: [sessionId], references: [id])
+
+  @@index([payerType, payerId])
+  @@index([stripePaymentId])
+  @@map("payments")
+}
+
+model AnalyticsEvent {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eventType String   @map("event_type") @db.VarChar(50)
+  huntId    String?  @map("hunt_id") @db.Uuid
+  clueId    String?  @map("clue_id") @db.Uuid
+  sponsorId String?  @map("sponsor_id") @db.Uuid
+  playerId  String?  @map("player_id") @db.Uuid
+  sessionId String?  @map("session_id") @db.Uuid
+  metadata  Json?
+  latitude  Decimal? @db.Decimal(10, 8)
+  longitude Decimal? @db.Decimal(11, 8)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  hunt    Hunt?        @relation(fields: [huntId], references: [id])
+  clue    Clue?        @relation(fields: [clueId], references: [id])
+  sponsor Sponsor?     @relation(fields: [sponsorId], references: [id])
+  player  User?        @relation(fields: [playerId], references: [id])
+  session GameSession? @relation(fields: [sessionId], references: [id])
+
+  @@index([eventType])
+  @@index([huntId])
+  @@index([sponsorId])
+  @@index([createdAt])
+  @@map("analytics_events")
+}

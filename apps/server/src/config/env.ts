@@ -1,6 +1,6 @@
 // Environment variable validation using Zod.
 // The server refuses to start if any required variable is missing or malformed.
-// This catches misconfiguration early instead of failing silently at runtime.
+// Non-essential services (Stripe, R2, Resend, Mapbox) are optional until those features are built.
 
 import { z } from 'zod';
 
@@ -17,22 +17,22 @@ const envSchema = z.object({
   JWT_ACCESS_EXPIRY: z.string().default('15m'),
   JWT_REFRESH_EXPIRY: z.string().default('7d'),
 
-  // Mapbox — required for map features
-  MAPBOX_ACCESS_TOKEN: z.string().min(1, 'MAPBOX_ACCESS_TOKEN is required'),
+  // Mapbox — optional until map features are built
+  MAPBOX_ACCESS_TOKEN: z.string().optional(),
 
-  // Cloudflare R2 — required for file uploads
-  R2_ACCOUNT_ID: z.string().min(1, 'R2_ACCOUNT_ID is required'),
-  R2_ACCESS_KEY_ID: z.string().min(1, 'R2_ACCESS_KEY_ID is required'),
-  R2_SECRET_ACCESS_KEY: z.string().min(1, 'R2_SECRET_ACCESS_KEY is required'),
+  // Cloudflare R2 — optional until file upload is built
+  R2_ACCOUNT_ID: z.string().optional(),
+  R2_ACCESS_KEY_ID: z.string().optional(),
+  R2_SECRET_ACCESS_KEY: z.string().optional(),
   R2_BUCKET_NAME: z.string().default('treasure-hunt'),
-  R2_PUBLIC_URL: z.string().url('R2_PUBLIC_URL must be a valid URL'),
+  R2_PUBLIC_URL: z.string().optional(),
 
-  // Stripe — required for payments
-  STRIPE_SECRET_KEY: z.string().startsWith('sk_', 'STRIPE_SECRET_KEY must start with sk_'),
-  STRIPE_WEBHOOK_SECRET: z.string().startsWith('whsec_', 'STRIPE_WEBHOOK_SECRET must start with whsec_'),
+  // Stripe — optional until payments are built
+  STRIPE_SECRET_KEY: z.string().optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().optional(),
 
-  // Resend — required for transactional email
-  RESEND_API_KEY: z.string().startsWith('re_', 'RESEND_API_KEY must start with re_'),
+  // Resend — optional until email is built
+  RESEND_API_KEY: z.string().optional(),
 
   // CORS — origins allowed to call the API
   ALLOWED_ORIGINS: z.string().default('http://localhost:3000,http://localhost:8081'),
