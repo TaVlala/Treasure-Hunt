@@ -30,7 +30,7 @@
 - [x] Auth middleware (authenticate + requireRole)
 - [x] Hunt CRUD (admin)
 - [x] Clue CRUD (admin)
-- [ ] Sponsor CRUD (admin)
+- [x] Sponsor CRUD (admin)
 - [ ] GPS proximity check endpoint
 - [ ] Game session: join hunt
 - [ ] Game session: check proximity / scan QR / submit answer

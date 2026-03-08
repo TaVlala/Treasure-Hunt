@@ -14,11 +14,11 @@ hunt tickets, and tourism board contracts.
 
 ## Current Phase: Phase 1 MVP — Infrastructure
 
-**Status:** Clue admin CRUD complete. Nested under /admin/hunts/:huntId/clues with mergeParams. PostGIS geography column updated via $executeRaw after every lat/lng write. AdminClue type separates answer from player-safe Clue type.
-Next: Sponsor CRUD (admin).
+**Status:** Sponsor admin CRUD complete. All admin CRUD endpoints implemented: Auth, Hunts, Clues, Sponsors. PostGIS geography column updated via $executeRaw after every lat/lng write. SponsorDetail type in shared package includes clueCount.
+Next: GPS proximity check endpoint.
 
-**Last completed chunk:** Chunk 1E — Clue CRUD admin (POST/GET/PUT reorder/PATCH/DELETE /api/v1/admin/hunts/:huntId/clues).
-**Next chunk:** Chunk 1F — Sponsor CRUD (admin: create, list, get, update sponsors).
+**Last completed chunk:** Chunk 1F — Sponsor CRUD admin (POST/GET/GET:id/PATCH:id/DELETE:id /api/v1/admin/sponsors, soft-delete → EXPIRED).
+**Next chunk:** Chunk 1G — GPS proximity check endpoint (player-facing).
 
 **Known fix:** Express 5 `ParamsDictionary` types named params as `string | string[]` — always extract with `req.params['key'] as string` in route handlers.
 
