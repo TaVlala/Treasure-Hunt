@@ -14,11 +14,11 @@ hunt tickets, and tourism board contracts.
 
 ## Current Phase: Phase 1 MVP — Infrastructure
 
-**Status:** Submit clue endpoint complete. POST /game/sessions/:id/submit handles gps/qr_code/answer methods, marks clue FOUND, unlocks next, completes session on last clue — all in $transaction.
-Next: Player progress tracking + leaderboard.
+**Status:** All core backend API endpoints complete. Progress tracking (GET /game/sessions/:sessionId) and leaderboard (GET /game/hunts/:huntId/leaderboard) done.
+Next: File upload to R2, then WebSocket leaderboard updates.
 
-**Last completed chunk:** Chunk 1I — Submit clue (POST /game/sessions/:sessionId/submit, method validation, transaction).
-**Next chunk:** Chunk 1J — Player progress tracking (GET session state) + basic leaderboard endpoint.
+**Last completed chunk:** Chunk 1J — Progress tracking + leaderboard (GET /game/sessions/:sessionId, GET /game/hunts/:huntId/leaderboard).
+**Next chunk:** Chunk 1K — File upload to Cloudflare R2 (POST /api/v1/upload).
 
 **Known fix:** Express 5 `ParamsDictionary` types named params as `string | string[]` — always extract with `req.params['key'] as string` in route handlers.
 

@@ -34,8 +34,8 @@
 - [x] GPS proximity check endpoint
 - [x] Game session: join hunt
 - [x] Game session: check proximity / scan QR / submit answer
-- [ ] Player progress tracking
-- [ ] Basic leaderboard endpoint
+- [x] Player progress tracking
+- [x] Basic leaderboard endpoint
 - [ ] File upload to R2
 - [ ] WebSocket: leaderboard updates
 
