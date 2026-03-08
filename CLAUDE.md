@@ -14,11 +14,11 @@ hunt tickets, and tourism board contracts.
 
 ## Current Phase: Phase 1 MVP — Infrastructure
 
-**Status:** Hunt admin CRUD complete. All 5 endpoints (create, list, get, update, soft-delete) are live behind `authenticate + requireRole('admin')`. Shared `Hunt` type updated with missing fields; `HuntDetail` added with `clueCount`.
-Next: Clue CRUD (admin).
+**Status:** Clue admin CRUD complete. Nested under /admin/hunts/:huntId/clues with mergeParams. PostGIS geography column updated via $executeRaw after every lat/lng write. AdminClue type separates answer from player-safe Clue type.
+Next: Sponsor CRUD (admin).
 
-**Last completed chunk:** Chunk 1D — Hunt CRUD admin (POST/GET/PATCH/DELETE /api/v1/admin/hunts).
-**Next chunk:** Chunk 1E — Clue CRUD (admin: create, reorder, update, delete clues within a hunt).
+**Last completed chunk:** Chunk 1E — Clue CRUD admin (POST/GET/PUT reorder/PATCH/DELETE /api/v1/admin/hunts/:huntId/clues).
+**Next chunk:** Chunk 1F — Sponsor CRUD (admin: create, list, get, update sponsors).
 
 **Known fix:** Express 5 `ParamsDictionary` types named params as `string | string[]` — always extract with `req.params['key'] as string` in route handlers.
 

@@ -29,7 +29,7 @@
 - [x] Auth: register + login + JWT + refresh tokens
 - [x] Auth middleware (authenticate + requireRole)
 - [x] Hunt CRUD (admin)
-- [ ] Clue CRUD (admin)
+- [x] Clue CRUD (admin)
 - [ ] Sponsor CRUD (admin)
 - [ ] GPS proximity check endpoint
 - [ ] Game session: join hunt
