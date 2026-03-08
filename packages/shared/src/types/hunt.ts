@@ -37,7 +37,9 @@ export interface Hunt {
   ticketPriceCents: number | null;
   currency: string;
   timeLimitMinutes: number | null;
+  maxPlayers: number | null;
   teamMode: TeamMode;
+  maxTeamSize: number;
   status: HuntStatus;
   startsAt: string | null;
   endsAt: string | null;
@@ -45,10 +47,18 @@ export interface Hunt {
   coverImageUrl: string | null;
   centerLat: number;
   centerLng: number;
+  zoomLevel: number;
   whitelabelName: string | null;
   whitelabelLogoUrl: string | null;
   whitelabelColor: string | null;
+  metaTitle: string | null;
+  metaDescription: string | null;
   createdAt: string;
+}
+
+// Returned from GET /admin/hunts/:id — includes derived fields not on list responses
+export interface HuntDetail extends Hunt {
+  clueCount: number;
 }
 
 export interface Clue {

@@ -12,6 +12,7 @@ import cookieParser from 'cookie-parser';
 
 import healthRouter from './routes/health.routes';
 import authRouter from './routes/auth.routes';
+import huntAdminRouter from './routes/hunt.admin.routes';
 import { errorHandler } from './middleware/errorHandler';
 
 const app = express();
@@ -40,8 +41,8 @@ app.use('/health', healthRouter);
 // Auth: register, login, refresh token, logout
 app.use('/api/v1/auth', authRouter);
 
-// Placeholder: future API routes
-// app.use('/api/v1/hunts', huntRouter);
+// Hunt admin CRUD (requires admin JWT)
+app.use('/api/v1/admin/hunts', huntAdminRouter);
 
 // --- Error handling ---
 
