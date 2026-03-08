@@ -16,6 +16,7 @@ import huntAdminRouter from './routes/hunt.admin.routes';
 import clueAdminRouter from './routes/clue.admin.routes';
 import sponsorAdminRouter from './routes/sponsor.admin.routes';
 import gameRouter from './routes/game.routes';
+import uploadRouter from './routes/upload.routes';
 import { errorHandler } from './middleware/errorHandler';
 
 const app = express();
@@ -53,8 +54,11 @@ app.use('/api/v1/admin/hunts/:huntId/clues', clueAdminRouter);
 // Sponsor admin CRUD
 app.use('/api/v1/admin/sponsors', sponsorAdminRouter);
 
-// Player game endpoints (proximity check, future: join hunt, submit answer)
+// Player game endpoints (proximity check, join hunt, submit answer, leaderboard)
 app.use('/api/v1/game', gameRouter);
+
+// File upload — generates presigned R2 PUT URLs for direct client uploads
+app.use('/api/v1/upload', uploadRouter);
 
 // --- Error handling ---
 
