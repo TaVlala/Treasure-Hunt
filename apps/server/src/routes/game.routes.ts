@@ -6,14 +6,18 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
 import { AppError } from '../middleware/errorHandler';
 import { authenticate } from '../middleware/authenticate';
-import { proximityCheckSchema, joinHuntSchema } from '../schemas/game.schemas';
+import { proximityCheckSchema, joinHuntSchema, submitClueSchema } from '../schemas/game.schemas';
 import type {
   ApiSuccess,
   ProximityCheckResult,
   GameSession,
   JoinHuntResult,
+  SubmitClueResult,
+  ClueProgress,
   Clue,
   SessionStatus,
+  ProgressStatus,
+  FoundMethod,
 } from '@treasure-hunt/shared';
 
 const router = Router();
@@ -266,5 +270,141 @@ router.post('/sessions', async (req: Request, res: Response, next: NextFunction)
     next(err);
   }
 });
+
+// POST /sessions/:sessionId/submit — player submits a clue find.
+// Validates the method (gps / qr_code / answer), marks the clue FOUND,
+// awards points, unlocks the next clue, and updates session totals.
+router.post(
+  '/sessions/:sessionId/submit',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const sessionId = req.params['sessionId'] as string;
+      const playerId = req.user!.id;
+      const body = submitClueSchema.parse(req.body);
+
+      // Load session — must belong to this player and be ACTIVE
+      const session = await prisma.gameSession.findUnique({
+        where: { id: sessionId },
+        include: { hunt: { select: { id: true } } },
+      });
+      if (!session) {
+        throw new AppError('Session not found', 404, 'NOT_FOUND');
+      }
+      if (session.playerId !== playerId) {
+        throw new AppError('Session does not belong to you', 403, 'FORBIDDEN');
+      }
+      if (session.status !== 'ACTIVE') {
+        throw new AppError('Session is no longer active', 409, 'SESSION_INACTIVE');
+      }
+
+      // Load the progress record for this clue — must be UNLOCKED
+      const progress = await prisma.playerProgress.findUnique({
+        where: { sessionId_clueId: { sessionId, clueId: body.clueId } },
+        include: { clue: true },
+      });
+      if (!progress) {
+        throw new AppError('Clue not part of this session', 404, 'NOT_FOUND');
+      }
+      if (progress.status === 'FOUND') {
+        throw new AppError('Clue already found', 409, 'ALREADY_FOUND');
+      }
+      if (progress.status !== 'UNLOCKED') {
+        throw new AppError('Clue is not yet unlocked', 409, 'CLUE_LOCKED');
+      }
+
+      // Method-specific validation
+      if (body.method === 'answer') {
+        if (!body.answer) {
+          throw new AppError('answer field is required for answer submission', 400, 'VALIDATION_ERROR');
+        }
+        const correctAnswer = progress.clue.answer;
+        if (!correctAnswer) {
+          throw new AppError('This clue does not have an answer', 409, 'NO_ANSWER');
+        }
+        if (body.answer.trim().toLowerCase() !== correctAnswer.trim().toLowerCase()) {
+          throw new AppError('Incorrect answer', 400, 'WRONG_ANSWER');
+        }
+      }
+      // GPS and QR_CODE methods are validated by proximity-check / QR scanning on the client;
+      // server trusts the method field for those (client already confirmed location/QR).
+
+      const pointsEarned = progress.clue.points;
+      const dbMethod = body.method.toUpperCase() as 'GPS' | 'QR_CODE' | 'ANSWER';
+
+      // Find the next clue in order so we can unlock it
+      const nextClueRow = await prisma.clue.findFirst({
+        where: {
+          huntId: session.huntId,
+          orderIndex: { gt: progress.clue.orderIndex },
+        },
+        orderBy: { orderIndex: 'asc' },
+      });
+
+      const isLastClue = nextClueRow === null;
+
+      // Run all updates atomically
+      const [updatedProgress, updatedSession] = await prisma.$transaction(async (tx) => {
+        // Mark this clue as FOUND
+        const prog = await tx.playerProgress.update({
+          where: { sessionId_clueId: { sessionId, clueId: body.clueId } },
+          data: {
+            status: 'FOUND',
+            foundAt: new Date(),
+            method: dbMethod,
+            pointsEarned,
+          },
+        });
+
+        // Unlock the next clue if there is one
+        if (nextClueRow) {
+          await tx.playerProgress.update({
+            where: { sessionId_clueId: { sessionId, clueId: nextClueRow.id } },
+            data: { status: 'UNLOCKED' },
+          });
+        }
+
+        // Update session totals; complete it if this was the last clue
+        const sess = await tx.gameSession.update({
+          where: { id: sessionId },
+          data: {
+            score: { increment: pointsEarned },
+            cluesFound: { increment: 1 },
+            ...(isLastClue && {
+              status: 'COMPLETED',
+              completedAt: new Date(),
+              timeTakenSecs: Math.round(
+                (Date.now() - session.startedAt.getTime()) / 1000,
+              ),
+            }),
+          },
+        });
+
+        return [prog, sess];
+      });
+
+      const clueProgressResponse: ClueProgress = {
+        clueId: updatedProgress.clueId,
+        status: updatedProgress.status.toLowerCase() as ProgressStatus,
+        foundAt: updatedProgress.foundAt ? updatedProgress.foundAt.toISOString() : null,
+        pointsEarned: updatedProgress.pointsEarned,
+        hintUsed: updatedProgress.hintUsed,
+      };
+
+      const response: ApiSuccess<SubmitClueResult> = {
+        success: true,
+        message: isLastClue ? 'Hunt complete!' : 'Clue found!',
+        data: {
+          session: toSessionResponse(updatedSession),
+          clueProgress: clueProgressResponse,
+          nextClue: nextClueRow ? toClueResponse(nextClueRow as ClueRow) : null,
+          huntComplete: isLastClue,
+        },
+      };
+      res.status(200).json(response);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 export default router;

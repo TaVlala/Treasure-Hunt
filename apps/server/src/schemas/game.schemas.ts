@@ -14,5 +14,16 @@ export const joinHuntSchema = z.object({
   huntId: z.string().uuid('huntId must be a valid UUID'),
 });
 
+// Body for POST /api/v1/game/sessions/:sessionId/submit
+export const submitClueSchema = z.object({
+  clueId: z.string().uuid('clueId must be a valid UUID'),
+  method: z.enum(['gps', 'qr_code', 'answer']),
+  // Required when method is 'answer'
+  answer: z.string().max(500).optional(),
+  // Required when method is 'qr_code'
+  qrPayload: z.string().max(200).optional(),
+});
+
 export type ProximityCheckBody = z.infer<typeof proximityCheckSchema>;
 export type JoinHuntBody = z.infer<typeof joinHuntSchema>;
+export type SubmitClueBody = z.infer<typeof submitClueSchema>;

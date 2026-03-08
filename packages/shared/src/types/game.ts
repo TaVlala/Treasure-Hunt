@@ -42,3 +42,11 @@ export interface JoinHuntResult {
   session: GameSession;
   currentClue: Clue | null;
 }
+
+// Result returned by POST /api/v1/game/sessions/:sessionId/submit
+export interface SubmitClueResult {
+  session: GameSession;
+  clueProgress: ClueProgress;  // progress record for the clue just found
+  nextClue: Clue | null;       // null when the hunt is complete
+  huntComplete: boolean;
+}
