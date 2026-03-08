@@ -1,6 +1,7 @@
 // Main Express server entry point.
 // Loads environment config, sets up middleware, registers routes, starts listening.
 
+// dotenv loaded via Node --env-file flag (see launch.json) or falls back to process cwd
 import 'dotenv/config';
 import { env } from './config/env';
 
