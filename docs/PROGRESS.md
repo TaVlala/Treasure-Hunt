@@ -13,20 +13,21 @@
 - [x] Architecture documented (ARCHITECTURE.md)
 - [x] Decision log started (DECISIONS.md)
 - [x] Sponsor system documented (SPONSORS.md)
-- [ ] Monorepo setup (Turborepo + workspaces)
-- [ ] Shared types package
-- [ ] Environment config (.env.example)
+- [x] Monorepo setup (Turborepo + workspaces)
+- [x] Shared types package
+- [x] Environment config (.env.example)
 - [ ] Database setup (PostgreSQL + PostGIS)
 - [ ] Prisma schema + initial migration
 - [ ] Seed data (demo hunt, clues, sponsor)
 
 ### Backend API (Server)
-- [ ] Express server boilerplate with TypeScript
+- [x] Express server boilerplate with TypeScript
+- [x] Error handling middleware (AppError class + global handler)
+- [x] Request validation setup (Zod — env validation working)
+- [x] Health check endpoint (GET /health)
 - [ ] Database connection + Prisma client
 - [ ] Auth: register + login + JWT + refresh tokens
 - [ ] Auth middleware (authenticate + requireRole)
-- [ ] Error handling middleware
-- [ ] Request validation (Zod)
 - [ ] Hunt CRUD (admin)
 - [ ] Clue CRUD (admin)
 - [ ] Sponsor CRUD (admin)

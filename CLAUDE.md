@@ -12,10 +12,13 @@ Sponsors pay to place branded clues at their locations. Players explore the city
 clues, and redeem prizes at sponsor businesses. Revenue comes from sponsor fees, paid
 hunt tickets, and tourism board contracts.
 
-## Current Phase: Pre-Development (Architecture Planning)
+## Current Phase: Phase 1 MVP — Infrastructure
 
-**Status:** Architecture fully documented, awaiting approval to begin Phase 1 MVP.
-No application code has been written yet. All planning documents are complete.
+**Status:** Monorepo scaffolding complete. Express server running with health check.
+Next: Prisma database schema + connection, then auth endpoints.
+
+**Last completed chunk:** Chunk 1A — Monorepo root + shared types + Express server boilerplate.
+**Next chunk:** Chunk 1B — Prisma schema + database connection (start new session).
 
 ## Key Architectural Decisions
 
