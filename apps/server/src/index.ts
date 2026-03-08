@@ -14,6 +14,7 @@ import healthRouter from './routes/health.routes';
 import authRouter from './routes/auth.routes';
 import huntAdminRouter from './routes/hunt.admin.routes';
 import clueAdminRouter from './routes/clue.admin.routes';
+import sponsorAdminRouter from './routes/sponsor.admin.routes';
 import { errorHandler } from './middleware/errorHandler';
 
 const app = express();
@@ -47,6 +48,9 @@ app.use('/api/v1/admin/hunts', huntAdminRouter);
 
 // Clue admin CRUD — nested under hunts; :huntId param is merged via mergeParams: true
 app.use('/api/v1/admin/hunts/:huntId/clues', clueAdminRouter);
+
+// Sponsor admin CRUD
+app.use('/api/v1/admin/sponsors', sponsorAdminRouter);
 
 // --- Error handling ---
 
