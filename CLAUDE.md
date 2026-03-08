@@ -14,11 +14,11 @@ hunt tickets, and tourism board contracts.
 
 ## Current Phase: Phase 1 MVP — Infrastructure
 
-**Status:** Game session join complete. POST /api/v1/game/sessions creates GameSession + PlayerProgress records in a transaction (first clue UNLOCKED). Returns session + first clue.
-Next: Game session submit answer / check proximity / scan QR.
+**Status:** Submit clue endpoint complete. POST /game/sessions/:id/submit handles gps/qr_code/answer methods, marks clue FOUND, unlocks next, completes session on last clue — all in $transaction.
+Next: Player progress tracking + leaderboard.
 
-**Last completed chunk:** Chunk 1H — Join hunt (POST /api/v1/game/sessions, transaction, first clue UNLOCKED).
-**Next chunk:** Chunk 1I — Game session submit: check proximity / scan QR / submit answer → marks clue FOUND, unlocks next.
+**Last completed chunk:** Chunk 1I — Submit clue (POST /game/sessions/:sessionId/submit, method validation, transaction).
+**Next chunk:** Chunk 1J — Player progress tracking (GET session state) + basic leaderboard endpoint.
 
 **Known fix:** Express 5 `ParamsDictionary` types named params as `string | string[]` — always extract with `req.params['key'] as string` in route handlers.
 
