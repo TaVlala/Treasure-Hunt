@@ -26,8 +26,8 @@
 - [x] Request validation setup (Zod — env validation working)
 - [x] Health check endpoint (GET /health)
 - [x] Database connection + Prisma client
-- [ ] Auth: register + login + JWT + refresh tokens
-- [ ] Auth middleware (authenticate + requireRole)
+- [x] Auth: register + login + JWT + refresh tokens
+- [x] Auth middleware (authenticate + requireRole)
 - [ ] Hunt CRUD (admin)
 - [ ] Clue CRUD (admin)
 - [ ] Sponsor CRUD (admin)

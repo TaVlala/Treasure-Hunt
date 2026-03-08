@@ -14,11 +14,11 @@ hunt tickets, and tourism board contracts.
 
 ## Current Phase: Phase 1 MVP — Infrastructure
 
-**Status:** Prisma schema + DB connection complete. Server starts cleanly, Prisma client wired in with graceful shutdown.
-Next: Auth endpoints (register, login, JWT, refresh tokens).
+**Status:** Auth complete. Server starts cleanly with register, login, refresh, logout endpoints. `authenticate` middleware + `requireRole` guard ready for use on any protected route.
+Next: Hunt CRUD admin endpoints.
 
-**Last completed chunk:** Chunk 1B — Prisma schema + database connection.
-**Next chunk:** Chunk 1C — Auth endpoints (register + login + JWT + refresh tokens).
+**Last completed chunk:** Chunk 1C — Auth endpoints (register + login + JWT + refresh tokens + middleware).
+**Next chunk:** Chunk 1D — Hunt CRUD (admin: create, read, update, delete hunts).
 
 ## Key Architectural Decisions
 
