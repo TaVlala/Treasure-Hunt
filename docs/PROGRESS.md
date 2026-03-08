@@ -36,7 +36,7 @@
 - [x] Game session: check proximity / scan QR / submit answer
 - [x] Player progress tracking
 - [x] Basic leaderboard endpoint
-- [ ] File upload to R2
+- [x] File upload to R2
 - [ ] WebSocket: leaderboard updates
 
 ### Admin Panel (Next.js)

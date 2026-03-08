@@ -14,11 +14,11 @@ hunt tickets, and tourism board contracts.
 
 ## Current Phase: Phase 1 MVP — Infrastructure
 
-**Status:** All core backend API endpoints complete. Progress tracking (GET /game/sessions/:sessionId) and leaderboard (GET /game/hunts/:huntId/leaderboard) done.
-Next: File upload to R2, then WebSocket leaderboard updates.
+**Status:** File upload complete. POST /api/v1/upload/presigned returns a 5-min presigned PUT URL for direct R2 upload. Gracefully returns 503 if R2 not configured. Only remaining backend item: WebSocket leaderboard.
+Next: WebSocket leaderboard updates, then start admin panel.
 
-**Last completed chunk:** Chunk 1J — Progress tracking + leaderboard (GET /game/sessions/:sessionId, GET /game/hunts/:huntId/leaderboard).
-**Next chunk:** Chunk 1K — File upload to Cloudflare R2 (POST /api/v1/upload).
+**Last completed chunk:** Chunk 1K — R2 file upload (POST /api/v1/upload/presigned, presigned URL, @aws-sdk).
+**Next chunk:** Chunk 1L — WebSocket leaderboard updates (Socket.io, emit on score change).
 
 **Known fix:** Express 5 `ParamsDictionary` types named params as `string | string[]` — always extract with `req.params['key'] as string` in route handlers.
 
