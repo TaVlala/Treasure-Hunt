@@ -14,11 +14,13 @@ hunt tickets, and tourism board contracts.
 
 ## Current Phase: Phase 1 MVP — Infrastructure
 
-**Status:** Auth complete. Server starts cleanly with register, login, refresh, logout endpoints. `authenticate` middleware + `requireRole` guard ready for use on any protected route.
-Next: Hunt CRUD admin endpoints.
+**Status:** Hunt admin CRUD complete. All 5 endpoints (create, list, get, update, soft-delete) are live behind `authenticate + requireRole('admin')`. Shared `Hunt` type updated with missing fields; `HuntDetail` added with `clueCount`.
+Next: Clue CRUD (admin).
 
-**Last completed chunk:** Chunk 1C — Auth endpoints (register + login + JWT + refresh tokens + middleware).
-**Next chunk:** Chunk 1D — Hunt CRUD (admin: create, read, update, delete hunts).
+**Last completed chunk:** Chunk 1D — Hunt CRUD admin (POST/GET/PATCH/DELETE /api/v1/admin/hunts).
+**Next chunk:** Chunk 1E — Clue CRUD (admin: create, reorder, update, delete clues within a hunt).
+
+**Known fix:** Express 5 `ParamsDictionary` types named params as `string | string[]` — always extract with `req.params['key'] as string` in route handlers.
 
 ## Key Architectural Decisions
 

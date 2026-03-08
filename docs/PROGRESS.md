@@ -28,7 +28,7 @@
 - [x] Database connection + Prisma client
 - [x] Auth: register + login + JWT + refresh tokens
 - [x] Auth middleware (authenticate + requireRole)
-- [ ] Hunt CRUD (admin)
+- [x] Hunt CRUD (admin)
 - [ ] Clue CRUD (admin)
 - [ ] Sponsor CRUD (admin)
 - [ ] GPS proximity check endpoint
