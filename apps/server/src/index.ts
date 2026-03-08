@@ -8,8 +8,10 @@ import { prisma } from './config/database';
 
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 
 import healthRouter from './routes/health.routes';
+import authRouter from './routes/auth.routes';
 import { errorHandler } from './middleware/errorHandler';
 
 const app = express();
@@ -18,6 +20,9 @@ const app = express();
 
 // Parse JSON request bodies
 app.use(express.json());
+
+// Parse cookies — required for reading the refresh token on /auth/refresh
+app.use(cookieParser());
 
 // CORS — allow requests from the admin panel and mobile dev server
 app.use(
@@ -32,8 +37,10 @@ app.use(
 // Health check — no auth required, used by Railway and monitoring
 app.use('/health', healthRouter);
 
-// Placeholder: all API routes will be added here in future chunks
-// app.use('/api/v1/auth', authRouter);
+// Auth: register, login, refresh token, logout
+app.use('/api/v1/auth', authRouter);
+
+// Placeholder: future API routes
 // app.use('/api/v1/hunts', huntRouter);
 
 // --- Error handling ---
