@@ -4,5 +4,6 @@
 export * from './types/user';
 export * from './types/hunt';
 export * from './types/sponsor';
+export * from './types/game';
 export * from './types/api';
 export * from './constants/game';

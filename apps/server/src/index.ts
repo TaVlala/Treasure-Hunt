@@ -15,6 +15,7 @@ import authRouter from './routes/auth.routes';
 import huntAdminRouter from './routes/hunt.admin.routes';
 import clueAdminRouter from './routes/clue.admin.routes';
 import sponsorAdminRouter from './routes/sponsor.admin.routes';
+import gameRouter from './routes/game.routes';
 import { errorHandler } from './middleware/errorHandler';
 
 const app = express();
@@ -51,6 +52,9 @@ app.use('/api/v1/admin/hunts/:huntId/clues', clueAdminRouter);
 
 // Sponsor admin CRUD
 app.use('/api/v1/admin/sponsors', sponsorAdminRouter);
+
+// Player game endpoints (proximity check, future: join hunt, submit answer)
+app.use('/api/v1/game', gameRouter);
 
 // --- Error handling ---
 
