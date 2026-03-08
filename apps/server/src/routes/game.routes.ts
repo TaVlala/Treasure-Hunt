@@ -6,13 +6,20 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
 import { AppError } from '../middleware/errorHandler';
 import { authenticate } from '../middleware/authenticate';
-import { proximityCheckSchema, joinHuntSchema, submitClueSchema } from '../schemas/game.schemas';
+import {
+  proximityCheckSchema,
+  joinHuntSchema,
+  submitClueSchema,
+  leaderboardQuerySchema,
+} from '../schemas/game.schemas';
 import type {
   ApiSuccess,
   ProximityCheckResult,
   GameSession,
   JoinHuntResult,
   SubmitClueResult,
+  SessionWithProgress,
+  LeaderboardEntry,
   ClueProgress,
   Clue,
   SessionStatus,
@@ -406,5 +413,87 @@ router.post(
     }
   },
 );
+
+// GET /sessions/:sessionId — fetch session state with full progress list.
+// Only the owning player (or an admin) can view a session.
+router.get('/sessions/:sessionId', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const sessionId = req.params['sessionId'] as string;
+    const requesterId = req.user!.id;
+    const requesterRole = req.user!.role;
+
+    const session = await prisma.gameSession.findUnique({
+      where: { id: sessionId },
+      include: { progress: true },
+    });
+
+    if (!session) {
+      throw new AppError('Session not found', 404, 'NOT_FOUND');
+    }
+
+    // Players can only view their own session; admins can view any
+    if (requesterRole !== 'admin' && session.playerId !== requesterId) {
+      throw new AppError('Session does not belong to you', 403, 'FORBIDDEN');
+    }
+
+    const progressList: ClueProgress[] = session.progress.map((p) => ({
+      clueId: p.clueId,
+      status: p.status.toLowerCase() as ProgressStatus,
+      foundAt: p.foundAt ? p.foundAt.toISOString() : null,
+      pointsEarned: p.pointsEarned,
+      hintUsed: p.hintUsed,
+    }));
+
+    const data: SessionWithProgress = {
+      ...toSessionResponse(session),
+      progress: progressList,
+    };
+
+    const response: ApiSuccess<SessionWithProgress> = { success: true, data };
+    res.status(200).json(response);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /hunts/:huntId/leaderboard — top players for a hunt ordered by score.
+router.get('/hunts/:huntId/leaderboard', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const huntId = req.params['huntId'] as string;
+    const { limit } = leaderboardQuerySchema.parse(req.query);
+
+    const hunt = await prisma.hunt.findUnique({ where: { id: huntId }, select: { id: true } });
+    if (!hunt) {
+      throw new AppError('Hunt not found', 404, 'NOT_FOUND');
+    }
+
+    const sessions = await prisma.gameSession.findMany({
+      where: { huntId },
+      include: { player: { select: { id: true, displayName: true } } },
+      orderBy: [
+        { score: 'desc' },
+        { cluesFound: 'desc' },
+        { timeTakenSecs: 'asc' },
+      ],
+      take: limit,
+    });
+
+    const entries: LeaderboardEntry[] = sessions.map((s, i) => ({
+      rank: i + 1,
+      playerId: s.playerId,
+      displayName: s.player.displayName,
+      score: s.score,
+      cluesFound: s.cluesFound,
+      totalClues: s.totalClues,
+      timeTakenSecs: s.timeTakenSecs,
+      completedAt: s.completedAt ? s.completedAt.toISOString() : null,
+    }));
+
+    const response: ApiSuccess<LeaderboardEntry[]> = { success: true, data: entries };
+    res.status(200).json(response);
+  } catch (err) {
+    next(err);
+  }
+});
 
 export default router;

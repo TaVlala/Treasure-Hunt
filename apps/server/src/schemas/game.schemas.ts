@@ -24,6 +24,12 @@ export const submitClueSchema = z.object({
   qrPayload: z.string().max(200).optional(),
 });
 
+// Query params for GET /api/v1/game/hunts/:huntId/leaderboard
+export const leaderboardQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+});
+
 export type ProximityCheckBody = z.infer<typeof proximityCheckSchema>;
 export type JoinHuntBody = z.infer<typeof joinHuntSchema>;
 export type SubmitClueBody = z.infer<typeof submitClueSchema>;
+export type LeaderboardQuery = z.infer<typeof leaderboardQuerySchema>;

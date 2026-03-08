@@ -50,3 +50,20 @@ export interface SubmitClueResult {
   nextClue: Clue | null;       // null when the hunt is complete
   huntComplete: boolean;
 }
+
+// Result returned by GET /api/v1/game/sessions/:sessionId
+export interface SessionWithProgress extends GameSession {
+  progress: ClueProgress[];
+}
+
+// Single entry in a hunt leaderboard
+export interface LeaderboardEntry {
+  rank: number;
+  playerId: string;
+  displayName: string;
+  score: number;
+  cluesFound: number;
+  totalClues: number;
+  timeTakenSecs: number | null;
+  completedAt: string | null;
+}
