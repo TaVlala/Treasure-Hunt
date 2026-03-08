@@ -14,11 +14,11 @@ hunt tickets, and tourism board contracts.
 
 ## Current Phase: Phase 1 MVP — Infrastructure
 
-**Status:** Sponsor admin CRUD complete. All admin CRUD endpoints implemented: Auth, Hunts, Clues, Sponsors. PostGIS geography column updated via $executeRaw after every lat/lng write. SponsorDetail type in shared package includes clueCount.
-Next: GPS proximity check endpoint.
+**Status:** GPS proximity check endpoint complete. POST /api/v1/game/proximity-check returns distanceMeters, radiusMeters, withinRange using PostGIS ST_DWithin with Haversine JS fallback when geography column is null.
+Next: Game session join hunt.
 
-**Last completed chunk:** Chunk 1F — Sponsor CRUD admin (POST/GET/GET:id/PATCH:id/DELETE:id /api/v1/admin/sponsors, soft-delete → EXPIRED).
-**Next chunk:** Chunk 1G — GPS proximity check endpoint (player-facing).
+**Last completed chunk:** Chunk 1G — GPS proximity check (POST /api/v1/game/proximity-check, authenticate middleware, PostGIS + Haversine fallback).
+**Next chunk:** Chunk 1H — Game session: join hunt (POST /api/v1/game/sessions).
 
 **Known fix:** Express 5 `ParamsDictionary` types named params as `string | string[]` — always extract with `req.params['key'] as string` in route handlers.
 
