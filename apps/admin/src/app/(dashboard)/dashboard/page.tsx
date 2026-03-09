@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { serverFetch } from '@/lib/server-api';
-import type { Hunt, Sponsor } from '@treasure-hunt/shared';
+import type { Hunt, Sponsor, PaginatedData } from '@treasure-hunt/shared';
 
 // -- Stat card subcomponent --
 
@@ -83,17 +83,18 @@ function HuntRow({ hunt, index }: { hunt: Hunt; index: number }) {
 
 export default async function DashboardPage() {
   // Fetch hunts and sponsors in parallel; both return null on failure
-  const [hunts, sponsors] = await Promise.all([
-    serverFetch<Hunt[]>('/api/v1/admin/hunts'),
-    serverFetch<Sponsor[]>('/api/v1/admin/sponsors'),
+  const [huntsData, sponsors] = await Promise.all([
+    serverFetch<PaginatedData<Hunt>>('/api/v1/admin/hunts?pageSize=100'),
+    serverFetch<PaginatedData<Sponsor>>('/api/v1/admin/sponsors?pageSize=100'),
   ]);
 
-  const totalHunts = hunts?.length ?? 0;
-  const activeHunts = hunts?.filter((h) => h.status === 'active').length ?? 0;
-  const totalSponsors = sponsors?.length ?? 0;
+  const hunts = huntsData?.items ?? [];
+  const totalHunts = huntsData?.total ?? 0;
+  const activeHunts = hunts.filter((h) => h.status === 'active').length;
+  const totalSponsors = sponsors?.total ?? 0;
 
   // Show the 5 most recently created hunts
-  const recentHunts = hunts?.slice(0, 5) ?? [];
+  const recentHunts = hunts.slice(0, 5);
 
   return (
     <div className="p-8 max-w-5xl">

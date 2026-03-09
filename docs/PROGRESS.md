@@ -43,8 +43,8 @@
 - [x] Next.js project setup (Next.js 15 App Router, Tailwind v3, TypeScript strict)
 - [x] Admin auth (login page + JWT cookie + clientFetch auto-refresh + serverFetch)
 - [x] Dashboard (stat cards: hunts/sponsors/players + recent hunts list)
-- [ ] Hunt list page
-- [ ] Hunt creation form
+- [x] Hunt list page
+- [x] Hunt creation form
 - [ ] Map-based clue placement (Mapbox)
 - [ ] Clue editor (text, GPS proximity, QR)
 - [ ] Sponsor list page

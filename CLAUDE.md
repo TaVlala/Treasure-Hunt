@@ -14,10 +14,10 @@ hunt tickets, and tourism board contracts.
 
 ## Current Phase: Phase 1 MVP — Admin Panel
 
-**Status:** Backend API complete. Socket.io WebSocket leaderboard done. Admin panel scaffolded: Next.js 15, auth (login + JWT cookie), middleware, sidebar, dashboard. Next: hunt list + create pages.
+**Status:** Backend API complete. Socket.io WebSocket leaderboard done. Admin panel: auth, dashboard, hunt list + create form done. Next: map-based clue placement (Mapbox) + clue editor.
 
-**Last completed chunk:** Admin panel setup — Next.js 15 App Router, Tailwind v3, login page, JWT auth, route-protecting middleware, sidebar layout, dashboard with live stats.
-**Next chunk:** Hunt list page (GET /api/v1/admin/hunts) + Hunt create form (POST /api/v1/admin/hunts).
+**Last completed chunk:** Hunt list page (paginated table, status filter, pagination) + Hunt create form (all fields, collapsible white-label/SEO sections, client-side validation, POST to API, redirect on success). Also fixed dashboard PaginatedData type bug.
+**Next chunk:** Map-based clue placement (Mapbox) + Clue editor (text riddle, GPS proximity, QR).
 
 **Known fix:** Express 5 `ParamsDictionary` types named params as `string | string[]` — always extract with `req.params['key'] as string` in route handlers.
 
