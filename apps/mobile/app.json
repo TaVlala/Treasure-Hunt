@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "Treasure Hunt",
+    "slug": "treasure-hunt",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "treasure-hunt",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.tavlala.treasurehunt"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#f59e0b"
+      },
+      "package": "com.tavlala.treasurehunt"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
