@@ -14,10 +14,10 @@ hunt tickets, and tourism board contracts.
 
 ## Current Phase: Phase 1 MVP — Admin Panel
 
-**Status:** Backend API complete. Admin panel: auth, dashboard, hunt list + create, hunt detail + clue editor with Mapbox map, sponsor list + create/edit all done. Next: Link sponsor to clue (associate a sponsor with a clue in ClueModal).
+**Status:** Backend API complete. Admin panel Phase 1 fully complete — auth, dashboard, hunt list/create, clue editor with Mapbox map, sponsor list/create/edit, sponsor-clue linking all done. Phase 1 MVP admin panel is feature-complete.
 
-**Last completed chunk:** Sponsor pages — `/sponsors` (paginated list with tier+status filters, clue count, fee, contract end), `/sponsors/new` (create form with Business/Contact/Location/Contract sections + collapsible Branding & Notes), `/sponsors/[id]` (edit form pre-filled from API, tier/status selectors, soft-delete Archive button sets status=expired).
-**Next chunk:** Link sponsor to clue — add a sponsor selector dropdown to ClueModal so clues can be associated with a sponsor.
+**Last completed chunk:** Link sponsor to clue — `AdminClue` type now includes `sponsorId`; clue schema/routes thread it through; `ClueModal` fetches active sponsors on mount and shows a "Sponsor" dropdown (No sponsor / active sponsors list); `sponsorId` sent as null or UUID in POST/PATCH payload.
+**Next chunk:** Phase 1 complete — next is mobile app (Expo) or fix PostgreSQL login issue to test everything end-to-end.
 
 **Known fix:** Express 5 `ParamsDictionary` types named params as `string | string[]` — always extract with `req.params['key'] as string` in route handlers.
 

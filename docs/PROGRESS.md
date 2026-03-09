@@ -49,7 +49,7 @@
 - [x] Clue editor (text, GPS proximity, QR)
 - [x] Sponsor list page
 - [x] Sponsor creation/edit form
-- [ ] Link sponsor to clue
+- [x] Link sponsor to clue
 
 ### Mobile Player App (Expo)
 - [ ] Expo project setup
