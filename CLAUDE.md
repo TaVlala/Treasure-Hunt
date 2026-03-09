@@ -14,10 +14,10 @@ hunt tickets, and tourism board contracts.
 
 ## Current Phase: Phase 1 MVP — Admin Panel
 
-**Status:** Backend API complete. Admin panel: auth, dashboard, hunt list + create, hunt detail + clue editor with Mapbox map done. Next: Sponsor list + create form.
+**Status:** Backend API complete. Admin panel: auth, dashboard, hunt list + create, hunt detail + clue editor with Mapbox map, sponsor list + create/edit all done. Next: Link sponsor to clue (associate a sponsor with a clue in ClueModal).
 
-**Last completed chunk:** Hunt detail page `/hunts/[id]` with two-panel layout — interactive Mapbox map (right) + clue list sidebar (left). ClueModal handles create/edit/delete for all clue types. MapboxMap dynamically imported (ssr:false), numbered amber markers, map-click to place. Graceful fallback when NEXT_PUBLIC_MAPBOX_TOKEN not set.
-**Next chunk:** Sponsor list page + Sponsor create/edit form.
+**Last completed chunk:** Sponsor pages — `/sponsors` (paginated list with tier+status filters, clue count, fee, contract end), `/sponsors/new` (create form with Business/Contact/Location/Contract sections + collapsible Branding & Notes), `/sponsors/[id]` (edit form pre-filled from API, tier/status selectors, soft-delete Archive button sets status=expired).
+**Next chunk:** Link sponsor to clue — add a sponsor selector dropdown to ClueModal so clues can be associated with a sponsor.
 
 **Known fix:** Express 5 `ParamsDictionary` types named params as `string | string[]` — always extract with `req.params['key'] as string` in route handlers.
 

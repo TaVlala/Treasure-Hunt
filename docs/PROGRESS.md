@@ -47,8 +47,8 @@
 - [x] Hunt creation form
 - [x] Map-based clue placement (Mapbox)
 - [x] Clue editor (text, GPS proximity, QR)
-- [ ] Sponsor list page
-- [ ] Sponsor creation/edit form
+- [x] Sponsor list page
+- [x] Sponsor creation/edit form
 - [ ] Link sponsor to clue
 
 ### Mobile Player App (Expo)
