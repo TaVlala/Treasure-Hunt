@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--workspace=apps/server"],
       "port": 3001
+    },
+    {
+      "name": "treasure-hunt-admin",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--workspace=apps/admin"],
+      "port": 3000
     }
   ]
 }
