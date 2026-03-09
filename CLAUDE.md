@@ -12,12 +12,12 @@ Sponsors pay to place branded clues at their locations. Players explore the city
 clues, and redeem prizes at sponsor businesses. Revenue comes from sponsor fees, paid
 hunt tickets, and tourism board contracts.
 
-## Current Phase: Phase 1 MVP — Admin Panel
+## Current Phase: Phase 1 MVP — Mobile Player App (Expo)
 
-**Status:** Backend API complete. Admin panel Phase 1 fully complete — auth, dashboard, hunt list/create, clue editor with Mapbox map, sponsor list/create/edit, sponsor-clue linking all done. Phase 1 MVP admin panel is feature-complete.
+**Status:** Backend API complete. Admin panel Phase 1 fully complete. Mobile app bootstrapped with player auth (login + register) complete.
 
-**Last completed chunk:** Link sponsor to clue — `AdminClue` type now includes `sponsorId`; clue schema/routes thread it through; `ClueModal` fetches active sponsors on mount and shows a "Sponsor" dropdown (No sponsor / active sponsors list); `sponsorId` sent as null or UUID in POST/PATCH payload.
-**Next chunk:** Phase 1 complete — next is mobile app (Expo) or fix PostgreSQL login issue to test everything end-to-end.
+**Last completed chunk:** Mobile app setup + player auth — Expo SDK 52 project created with expo-router v4, SecureStore-backed auth (storeToken/getToken/storeUser/getUser), `playerFetch` with 401 auto-refresh via httpOnly cookie, `AuthProvider` context with login/register/logout, login + register screens (dark amber aesthetic), tab shell with redirect guards.
+**Next chunk:** Hunt discovery screen — fetch available hunts from `/api/v1/player/hunts`, display as scrollable card list on the Discover tab (`/(tabs)/index.tsx`).
 
 **Known fix:** Express 5 `ParamsDictionary` types named params as `string | string[]` — always extract with `req.params['key'] as string` in route handlers.
 

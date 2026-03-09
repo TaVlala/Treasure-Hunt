@@ -52,8 +52,8 @@
 - [x] Link sponsor to clue
 
 ### Mobile Player App (Expo)
-- [ ] Expo project setup
-- [ ] Player auth (register + login)
+- [x] Expo project setup
+- [x] Player auth (register + login)
 - [ ] Hunt discovery screen (list view)
 - [ ] Hunt detail page
 - [ ] Join hunt flow
