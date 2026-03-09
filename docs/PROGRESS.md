@@ -37,7 +37,7 @@
 - [x] Player progress tracking
 - [x] Basic leaderboard endpoint
 - [x] File upload to R2
-- [ ] WebSocket: leaderboard updates
+- [x] WebSocket: leaderboard updates
 
 ### Admin Panel (Next.js)
 - [ ] Next.js project setup
