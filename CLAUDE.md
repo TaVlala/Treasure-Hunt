@@ -12,15 +12,16 @@ Sponsors pay to place branded clues at their locations. Players explore the city
 clues, and redeem prizes at sponsor businesses. Revenue comes from sponsor fees, paid
 hunt tickets, and tourism board contracts.
 
-## Current Phase: Phase 1 MVP — Infrastructure
+## Current Phase: Phase 1 MVP — Admin Panel
 
-**Status:** File upload complete. POST /api/v1/upload/presigned returns a 5-min presigned PUT URL for direct R2 upload. Gracefully returns 503 if R2 not configured. Only remaining backend item: WebSocket leaderboard.
-Next: WebSocket leaderboard updates, then start admin panel.
+**Status:** Backend API complete. Socket.io WebSocket leaderboard done. Admin panel scaffolded: Next.js 15, auth (login + JWT cookie), middleware, sidebar, dashboard. Next: hunt list + create pages.
 
-**Last completed chunk:** Chunk 1K — R2 file upload (POST /api/v1/upload/presigned, presigned URL, @aws-sdk).
-**Next chunk:** Chunk 1L — WebSocket leaderboard updates (Socket.io, emit on score change).
+**Last completed chunk:** Admin panel setup — Next.js 15 App Router, Tailwind v3, login page, JWT auth, route-protecting middleware, sidebar layout, dashboard with live stats.
+**Next chunk:** Hunt list page (GET /api/v1/admin/hunts) + Hunt create form (POST /api/v1/admin/hunts).
 
 **Known fix:** Express 5 `ParamsDictionary` types named params as `string | string[]` — always extract with `req.params['key'] as string` in route handlers.
+
+**Tailwind on Windows (non-CWD launch):** `postcss.config.js` must pass `config: path.join(__dirname, 'tailwind.config.js')` explicitly. `tailwind.config.js` must convert `__dirname` with `path.sep` split to avoid Windows backslashes in fast-glob patterns.
 
 ## Key Architectural Decisions
 

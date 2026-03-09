@@ -37,12 +37,12 @@
 - [x] Player progress tracking
 - [x] Basic leaderboard endpoint
 - [x] File upload to R2
-- [ ] WebSocket: leaderboard updates
+- [x] WebSocket: leaderboard updates (Socket.io, emit on clue submit)
 
 ### Admin Panel (Next.js)
-- [ ] Next.js project setup
-- [ ] Admin auth (login page + JWT handling)
-- [ ] Dashboard (placeholder stats)
+- [x] Next.js project setup (Next.js 15 App Router, Tailwind v3, TypeScript strict)
+- [x] Admin auth (login page + JWT cookie + clientFetch auto-refresh + serverFetch)
+- [x] Dashboard (stat cards: hunts/sponsors/players + recent hunts list)
 - [ ] Hunt list page
 - [ ] Hunt creation form
 - [ ] Map-based clue placement (Mapbox)
