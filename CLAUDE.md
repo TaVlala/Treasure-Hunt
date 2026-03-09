@@ -14,10 +14,10 @@ hunt tickets, and tourism board contracts.
 
 ## Current Phase: Phase 1 MVP — Admin Panel
 
-**Status:** Backend API complete. Socket.io WebSocket leaderboard done. Admin panel: auth, dashboard, hunt list + create form done. Next: map-based clue placement (Mapbox) + clue editor.
+**Status:** Backend API complete. Admin panel: auth, dashboard, hunt list + create, hunt detail + clue editor with Mapbox map done. Next: Sponsor list + create form.
 
-**Last completed chunk:** Hunt list page (paginated table, status filter, pagination) + Hunt create form (all fields, collapsible white-label/SEO sections, client-side validation, POST to API, redirect on success). Also fixed dashboard PaginatedData type bug.
-**Next chunk:** Map-based clue placement (Mapbox) + Clue editor (text riddle, GPS proximity, QR).
+**Last completed chunk:** Hunt detail page `/hunts/[id]` with two-panel layout — interactive Mapbox map (right) + clue list sidebar (left). ClueModal handles create/edit/delete for all clue types. MapboxMap dynamically imported (ssr:false), numbered amber markers, map-click to place. Graceful fallback when NEXT_PUBLIC_MAPBOX_TOKEN not set.
+**Next chunk:** Sponsor list page + Sponsor create/edit form.
 
 **Known fix:** Express 5 `ParamsDictionary` types named params as `string | string[]` — always extract with `req.params['key'] as string` in route handlers.
 

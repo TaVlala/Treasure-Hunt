@@ -45,8 +45,8 @@
 - [x] Dashboard (stat cards: hunts/sponsors/players + recent hunts list)
 - [x] Hunt list page
 - [x] Hunt creation form
-- [ ] Map-based clue placement (Mapbox)
-- [ ] Clue editor (text, GPS proximity, QR)
+- [x] Map-based clue placement (Mapbox)
+- [x] Clue editor (text, GPS proximity, QR)
 - [ ] Sponsor list page
 - [ ] Sponsor creation/edit form
 - [ ] Link sponsor to clue
