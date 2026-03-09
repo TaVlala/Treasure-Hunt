@@ -6,6 +6,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
 import { AppError } from '../middleware/errorHandler';
 import { authenticate } from '../middleware/authenticate';
+import { getIO } from '../socket';
 import {
   proximityCheckSchema,
   joinHuntSchema,
@@ -408,6 +409,37 @@ router.post(
         },
       };
       res.status(200).json(response);
+
+      // Emit updated leaderboard to all sockets watching this hunt room.
+      // Fire-and-forget — a DB or socket error must never fail the HTTP response.
+      const huntId = session.huntId;
+      try {
+        const leaderboardSessions = await prisma.gameSession.findMany({
+          where: { huntId },
+          include: { player: { select: { id: true, displayName: true } } },
+          orderBy: [
+            { score: 'desc' },
+            { cluesFound: 'desc' },
+            { timeTakenSecs: 'asc' },
+          ],
+          take: 20,
+        });
+
+        const leaderboard: LeaderboardEntry[] = leaderboardSessions.map((s, i) => ({
+          rank: i + 1,
+          playerId: s.playerId,
+          displayName: s.player.displayName,
+          score: s.score,
+          cluesFound: s.cluesFound,
+          totalClues: s.totalClues,
+          timeTakenSecs: s.timeTakenSecs,
+          completedAt: s.completedAt ? s.completedAt.toISOString() : null,
+        }));
+
+        getIO().to(`hunt:${huntId}`).emit('leaderboard:update', { huntId, entries: leaderboard });
+      } catch (emitErr) {
+        console.error('[Socket] Failed to emit leaderboard update:', emitErr);
+      }
     } catch (err) {
       next(err);
     }

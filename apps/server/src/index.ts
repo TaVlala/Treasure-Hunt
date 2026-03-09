@@ -6,9 +6,11 @@ import 'dotenv/config';
 import { env } from './config/env';
 import { prisma } from './config/database';
 
+import http from 'http';
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
+import { initSocketIO } from './socket';
 
 import healthRouter from './routes/health.routes';
 import authRouter from './routes/auth.routes';
@@ -67,10 +69,17 @@ app.use(errorHandler);
 
 // --- Start server ---
 
-const server = app.listen(env.PORT, () => {
+// Wrap Express in a raw HTTP server so Socket.io can share the same port
+const server = http.createServer(app);
+
+// Attach Socket.io — must happen before server.listen()
+initSocketIO(server);
+
+server.listen(env.PORT, () => {
   console.log(`✅ Treasure Hunt API running on http://localhost:${env.PORT}`);
   console.log(`   Environment: ${env.NODE_ENV}`);
   console.log(`   Health check: http://localhost:${env.PORT}/health`);
+  console.log(`   WebSocket:    ws://localhost:${env.PORT}`);
 });
 
 // --- Graceful shutdown ---
