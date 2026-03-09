@@ -17,6 +17,7 @@ const clueFields = z.object({
   isBonus: z.boolean().default(false),
   points: z.number().int().min(0).default(10),
   unlockMessage: z.string().optional(),
+  sponsorId: z.string().uuid().nullable().optional(), // optional sponsor association
 });
 
 // Create: all fields required except defaults

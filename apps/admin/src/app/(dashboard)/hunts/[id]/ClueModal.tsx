@@ -1,12 +1,19 @@
 // Clue create / edit / delete modal.
 // In create mode (clue=null) it POSTs a new clue; in edit mode it PATCHes.
 // Lat/lng are pre-filled from the map click but remain editable.
+// Fetches active sponsors on mount to populate the sponsor selector.
 
 'use client';
 
 import { useState, useEffect } from 'react';
 import { clientFetch } from '@/lib/api';
-import type { AdminClue } from '@treasure-hunt/shared';
+import type { AdminClue, PaginatedData, SponsorDetail } from '@treasure-hunt/shared';
+
+// Minimal sponsor shape needed for the dropdown
+interface SponsorOption {
+  id: string;
+  businessName: string;
+}
 
 interface Props {
   huntId: string;
@@ -42,6 +49,7 @@ interface FormValues {
   isBonus: boolean;
   imageUrl: string;
   unlockMessage: string;
+  sponsorId: string; // empty string = no sponsor
 }
 
 const inputCls =
@@ -79,10 +87,27 @@ export function ClueModal({ huntId, clue, lat, lng, onClose, onSaved, onDeleted 
     isBonus: clue?.isBonus ?? false,
     imageUrl: clue?.imageUrl ?? '',
     unlockMessage: clue?.unlockMessage ?? '',
+    sponsorId: clue?.sponsorId ?? '',
   });
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Sponsor list for the dropdown — fetched once when the modal opens
+  const [sponsors, setSponsors] = useState<SponsorOption[]>([]);
+
+  // Fetch active sponsors on mount (fire-and-forget — failure just leaves dropdown empty)
+  useEffect(() => {
+    void clientFetch<PaginatedData<SponsorDetail>>(
+      '/api/v1/admin/sponsors?status=active&pageSize=100',
+    )
+      .then((data) =>
+        setSponsors(data.items.map((s) => ({ id: s.id, businessName: s.businessName }))),
+      )
+      .catch(() => {
+        // Silently ignore — sponsor selector is optional
+      });
+  }, []);
 
   // Sync lat/lng if parent updates the coordinates (e.g. map re-click while modal is open)
   useEffect(() => {
@@ -126,6 +151,8 @@ export function ClueModal({ huntId, clue, lat, lng, onClose, onSaved, onDeleted 
     if (form.hintText.trim()) payload.hintText = form.hintText.trim();
     if (form.imageUrl.trim()) payload.imageUrl = form.imageUrl.trim();
     if (form.unlockMessage.trim()) payload.unlockMessage = form.unlockMessage.trim();
+    // null unlinks the sponsor; a UUID links it
+    payload.sponsorId = form.sponsorId || null;
 
     try {
       setLoading(true);
@@ -356,6 +383,28 @@ export function ClueModal({ huntId, clue, lat, lng, onClose, onSaved, onDeleted 
               className={inputCls}
               placeholder="Shown to players when they unlock this clue"
             />
+          </div>
+
+          {/* Sponsor selector */}
+          <div>
+            <Label>Sponsor</Label>
+            <select
+              value={form.sponsorId}
+              onChange={(e) => update('sponsorId', e.target.value)}
+              className={selectCls}
+            >
+              <option value="" className="bg-surface">No sponsor</option>
+              {sponsors.map((s) => (
+                <option key={s.id} value={s.id} className="bg-surface">
+                  {s.businessName}
+                </option>
+              ))}
+            </select>
+            {sponsors.length === 0 && (
+              <p className="text-[10px] text-text-faint mt-1">
+                No active sponsors yet — add one in the Sponsors section
+              </p>
+            )}
           </div>
 
           {/* Action row */}

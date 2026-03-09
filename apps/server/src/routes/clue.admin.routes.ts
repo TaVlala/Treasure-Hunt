@@ -45,6 +45,7 @@ type ClueRow = {
   isBonus: boolean;
   points: number;
   unlockMessage: string | null;
+  sponsorId: string | null;
   createdAt: Date;
 };
 
@@ -66,6 +67,7 @@ function toClueResponse(clue: ClueRow): AdminClue {
     isBonus: clue.isBonus,
     points: clue.points,
     unlockMessage: clue.unlockMessage,
+    sponsorId: clue.sponsorId,
     createdAt: clue.createdAt.toISOString(),
   };
 }
@@ -115,6 +117,7 @@ function toCreateData(body: CreateClueBody, huntId: string, orderIndex: number) 
     isBonus: body.isBonus,
     points: body.points,
     unlockMessage: body.unlockMessage,
+    sponsorId: body.sponsorId ?? null,
   };
 }
 
@@ -141,6 +144,7 @@ function toUpdateData(body: UpdateClueBody) {
     isBonus: body.isBonus,
     points: body.points,
     unlockMessage: body.unlockMessage,
+    sponsorId: body.sponsorId, // undefined = not changed; null = unlink sponsor
   };
 }
 

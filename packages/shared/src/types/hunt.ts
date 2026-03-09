@@ -80,7 +80,8 @@ export interface Clue {
   createdAt: string;
 }
 
-// Admin-only clue shape — includes the answer (not exposed to players)
+// Admin-only clue shape — includes the answer and linked sponsor
 export interface AdminClue extends Clue {
   answer: string | null;
+  sponsorId: string | null;
 }
