@@ -12,12 +12,12 @@ Sponsors pay to place branded clues at their locations. Players explore the city
 clues, and redeem prizes at sponsor businesses. Revenue comes from sponsor fees, paid
 hunt tickets, and tourism board contracts.
 
-## Current Phase: Phase 1 MVP — Mobile Player App (Expo)
+## Current Phase: Phase 2 — First Live Public Hunt
 
-**Status:** Backend API complete. Admin panel Phase 1 fully complete. Mobile app Phase 1 COMPLETE — all MVP screens done.
+**Status:** Phase 1 fully complete and merged to main. Starting Phase 2: prizes, Stripe tickets, push notifications, team play, public landing pages.
 
-**Last completed chunk:** Hunt completion screen — created `app/hunt/[id]/complete.tsx` with animated score counter (Animated API count-up), stat grid (rank, players, time, clues found), rank banner (gold highlight for 1st), "Back to Discover" + "View Full Leaderboard" CTAs; updated `active.tsx` to navigate to complete screen instead of Alert on hunt finish.
-**Next chunk:** Phase 1 wrap-up — merge `feature/hunt-discovery-screen` → `main`, then begin Phase 2 planning (prizes, Stripe tickets, push notifications).
+**Last completed chunk:** Phase 1 merge — fast-forward merged `feature/hunt-discovery-screen` → `main`; deleted feature branch. All Phase 1 screens complete: auth, discovery, hunt detail, join, GPS active screen, hints, session resume, QR scanner, sponsor clue card, progress tracker, leaderboard, hunt completion.
+**Next chunk:** Prize gallery on completion screen — `GET /api/v1/player/hunts/:huntId/prizes` returns prizes the player earned (`minCluesFound` ≤ `cluesFound`); show prize cards on `complete.tsx` with "Claim Prize" CTA.
 
 **Known fix:** Express 5 `ParamsDictionary` types named params as `string | string[]` — always extract with `req.params['key'] as string` in route handlers.
 
