@@ -66,7 +66,7 @@
 - [x] Sponsor clue card (branded content — strip with name, message, offer, CTA)
 - [x] Progress tracker (Clue X of Y pill + progress bar — already in active screen)
 - [x] Basic leaderboard view (ranked list, current player highlighted, pull-to-refresh)
-- [ ] Hunt completion screen
+- [x] Hunt completion screen (animated score, stat grid, rank badge, leaderboard CTA)
 
 ### Design System
 - [ ] Typography selection (display + body fonts)

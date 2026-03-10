@@ -221,11 +221,7 @@ export default function ActiveHuntScreen() {
       );
 
       if (result.huntComplete) {
-        Alert.alert(
-          '🎉 Hunt Complete!',
-          `You found all ${result.session.totalClues} clues!\nFinal score: ${result.session.score} pts`,
-          [{ text: 'Awesome!', onPress: () => router.replace('/(tabs)') }],
-        );
+        router.replace(`/hunt/${huntId}/complete?sessionId=${sessionId}`);
         return;
       }
 

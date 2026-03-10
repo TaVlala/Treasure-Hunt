@@ -14,10 +14,10 @@ hunt tickets, and tourism board contracts.
 
 ## Current Phase: Phase 1 MVP — Mobile Player App (Expo)
 
-**Status:** Backend API complete. Admin panel Phase 1 fully complete. Mobile app: auth + discovery + hunt detail + active hunt GPS screen + hint reveal + session resume + QR scanner + sponsor clue card + leaderboard complete.
+**Status:** Backend API complete. Admin panel Phase 1 fully complete. Mobile app Phase 1 COMPLETE — all MVP screens done.
 
-**Last completed chunk:** Sponsor clue card + leaderboard — added `ClueSponsor` + `ClueWithSponsor` shared types; updated `GET /player/hunts/:huntId/clues/:clueId` to join `sponsorClue → sponsor`; `active.tsx` now renders sponsor strip (name, branded message, offer, CTA) below clue card and score pill navigates to leaderboard; created `app/hunt/[id]/leaderboard.tsx` (ranked list, current player highlighted, pull-to-refresh).
-**Next chunk:** Hunt completion screen — dedicated end screen after last clue is found; show final score, time, rank, and any prizes earned; "Share Result" CTA.
+**Last completed chunk:** Hunt completion screen — created `app/hunt/[id]/complete.tsx` with animated score counter (Animated API count-up), stat grid (rank, players, time, clues found), rank banner (gold highlight for 1st), "Back to Discover" + "View Full Leaderboard" CTAs; updated `active.tsx` to navigate to complete screen instead of Alert on hunt finish.
+**Next chunk:** Phase 1 wrap-up — merge `feature/hunt-discovery-screen` → `main`, then begin Phase 2 planning (prizes, Stripe tickets, push notifications).
 
 **Known fix:** Express 5 `ParamsDictionary` types named params as `string | string[]` — always extract with `req.params['key'] as string` in route handlers.
 
