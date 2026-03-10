@@ -14,10 +14,10 @@ hunt tickets, and tourism board contracts.
 
 ## Current Phase: Phase 1 MVP — Mobile Player App (Expo)
 
-**Status:** Backend API complete. Admin panel Phase 1 fully complete. Mobile app: auth + discovery + hunt detail + active hunt GPS screen + hint reveal + session resume + QR scanner complete.
+**Status:** Backend API complete. Admin panel Phase 1 fully complete. Mobile app: auth + discovery + hunt detail + active hunt GPS screen + hint reveal + session resume + QR scanner + sponsor clue card + leaderboard complete.
 
-**Last completed chunk:** Hint reveal + session resume + QR scanner — added `POST /api/v1/game/sessions/:sessionId/hint` (5pt atomic deduction via `$transaction`); added `GET /api/v1/player/hunts/:huntId/my-session`; installed `expo-camera`; rewrote `active.tsx` with hint reveal, QR fullscreen modal (`CameraView`), hint state restore on resume, QR scan debouncing; updated `index.tsx` with parallel session fetch + Resume/Join conditional footer.
-**Next chunk:** Sponsor clue card + progress tracker — show branded sponsor content on active clue card (logo, name, CTA), add clue progress indicator ("Clue 2 of 5") to active screen, and basic leaderboard view screen.
+**Last completed chunk:** Sponsor clue card + leaderboard — added `ClueSponsor` + `ClueWithSponsor` shared types; updated `GET /player/hunts/:huntId/clues/:clueId` to join `sponsorClue → sponsor`; `active.tsx` now renders sponsor strip (name, branded message, offer, CTA) below clue card and score pill navigates to leaderboard; created `app/hunt/[id]/leaderboard.tsx` (ranked list, current player highlighted, pull-to-refresh).
+**Next chunk:** Hunt completion screen — dedicated end screen after last clue is found; show final score, time, rank, and any prizes earned; "Share Result" CTA.
 
 **Known fix:** Express 5 `ParamsDictionary` types named params as `string | string[]` — always extract with `req.params['key'] as string` in route handlers.
 

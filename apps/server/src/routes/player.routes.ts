@@ -11,6 +11,8 @@ import type {
   Hunt,
   HuntDetail,
   Clue,
+  ClueWithSponsor,
+  ClueSponsor,
   HuntDifficulty,
   HuntTheme,
   HuntType,
@@ -292,6 +294,17 @@ router.get('/hunts/:huntId/clues/:clueId', async (req: Request, res: Response, n
         unlockMessage: true,
         createdAt: true,
         hunt: { select: { status: true } },
+        sponsorClue: {
+          select: {
+            brandedMessage: true,
+            offerText: true,
+            brandingColor: true,
+            callToAction: true,
+            sponsor: {
+              select: { businessName: true, logoUrl: true, websiteUrl: true },
+            },
+          },
+        },
       },
     });
 
@@ -311,9 +324,23 @@ router.get('/hunts/:huntId/clues/:clueId', async (req: Request, res: Response, n
       throw new AppError('No active session for this hunt', 403, 'FORBIDDEN');
     }
 
-    const response: ApiSuccess<Clue> = {
+    // Build optional sponsor branding data
+    const sc = clue.sponsorClue;
+    const sponsor: ClueSponsor | null = sc
+      ? {
+          businessName: sc.sponsor.businessName,
+          logoUrl: sc.sponsor.logoUrl,
+          websiteUrl: sc.sponsor.websiteUrl,
+          brandedMessage: sc.brandedMessage,
+          offerText: sc.offerText,
+          brandingColor: sc.brandingColor,
+          callToAction: sc.callToAction,
+        }
+      : null;
+
+    const response: ApiSuccess<ClueWithSponsor> = {
       success: true,
-      data: toClueResponse(clue as ClueRow),
+      data: { ...toClueResponse(clue as ClueRow), sponsor },
     };
     res.status(200).json(response);
   } catch (err) {

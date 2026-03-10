@@ -85,3 +85,19 @@ export interface AdminClue extends Clue {
   answer: string | null;
   sponsorId: string | null;
 }
+
+// Sponsor branding data embedded in a player-facing clue response
+export interface ClueSponsor {
+  businessName: string;
+  logoUrl: string | null;
+  websiteUrl: string | null;
+  brandedMessage: string | null;
+  offerText: string | null;
+  brandingColor: string | null;
+  callToAction: string | null;
+}
+
+// Player clue with optional sponsor branding (GET /player/hunts/:huntId/clues/:clueId)
+export interface ClueWithSponsor extends Clue {
+  sponsor: ClueSponsor | null;
+}

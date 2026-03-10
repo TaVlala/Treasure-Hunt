@@ -63,9 +63,9 @@
 - [x] Session resume (detect mid-hunt session on detail screen, continue without re-joining)
 - [x] Clue view (text riddle + hint text in active screen)
 - [x] QR scanner (expo-camera, fullscreen modal, barcode scan submit)
-- [ ] Sponsor clue card (branded content)
-- [ ] Progress tracker
-- [ ] Basic leaderboard view
+- [x] Sponsor clue card (branded content — strip with name, message, offer, CTA)
+- [x] Progress tracker (Clue X of Y pill + progress bar — already in active screen)
+- [x] Basic leaderboard view (ranked list, current player highlighted, pull-to-refresh)
 - [ ] Hunt completion screen
 
 ### Design System

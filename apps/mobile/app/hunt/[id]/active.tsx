@@ -21,7 +21,7 @@ import * as Location from 'expo-location';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { playerFetch } from '@/lib/api';
 import type {
-  Clue,
+  ClueWithSponsor,
   SessionWithProgress,
   SubmitClueResult,
 } from '@treasure-hunt/shared';
@@ -121,7 +121,7 @@ export default function ActiveHuntScreen() {
 
   // Session + clue state
   const [session, setSession] = useState<SessionWithProgress | null>(null);
-  const [currentClue, setCurrentClue] = useState<Clue | null>(null);
+  const [currentClue, setCurrentClue] = useState<ClueWithSponsor | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -152,7 +152,7 @@ export default function ActiveHuntScreen() {
 
         const unlockedProgress = data.progress.find((p) => p.status === 'unlocked');
         if (unlockedProgress) {
-          const clue = await playerFetch<Clue>(
+          const clue = await playerFetch<ClueWithSponsor>(
             `/api/v1/player/hunts/${huntId}/clues/${unlockedProgress.clueId}`,
           ).catch(() => null);
           setCurrentClue(clue);
@@ -229,11 +229,11 @@ export default function ActiveHuntScreen() {
         return;
       }
 
-      // Load full clue data for the next clue
+      // Load full clue data (with sponsor) for the next clue
       const nextClue = result.nextClue
-        ? await playerFetch<Clue>(
+        ? await playerFetch<ClueWithSponsor>(
             `/api/v1/player/hunts/${huntId}/clues/${result.nextClue.id}`,
-          ).catch(() => result.nextClue)
+          ).catch(() => ({ ...result.nextClue!, sponsor: null }) as ClueWithSponsor)
         : null;
 
       setSession(result.session);
@@ -375,9 +375,13 @@ export default function ActiveHuntScreen() {
         <View style={styles.progressPill}>
           <Text style={styles.progressText}>Clue {clueIndex + 1} of {session.totalClues}</Text>
         </View>
-        <View style={styles.scorePill}>
-          <Text style={styles.scoreText}>{session.score} pts</Text>
-        </View>
+        <TouchableOpacity
+          style={styles.scorePill}
+          onPress={() => router.push(`/hunt/${huntId}/leaderboard?sessionId=${sessionId}&playerId=${session.playerId}`)}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.scoreText}>🏆 {session.score} pts</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Progress bar */}
@@ -442,6 +446,32 @@ export default function ActiveHuntScreen() {
             </View>
           )}
         </View>
+
+        {/* Sponsor strip — shown when this clue is sponsored */}
+        {currentClue.sponsor && (
+          <View style={[
+            styles.sponsorStrip,
+            currentClue.sponsor.brandingColor
+              ? { borderColor: currentClue.sponsor.brandingColor + '66' }
+              : undefined,
+          ]}>
+            <View style={styles.sponsorRow}>
+              <Text style={styles.sponsorBadge}>SPONSOR</Text>
+              <Text style={styles.sponsorName}>{currentClue.sponsor.businessName}</Text>
+            </View>
+            {currentClue.sponsor.brandedMessage ? (
+              <Text style={styles.sponsorMessage}>{currentClue.sponsor.brandedMessage}</Text>
+            ) : null}
+            {currentClue.sponsor.offerText ? (
+              <View style={styles.sponsorOfferRow}>
+                <Text style={styles.sponsorOfferText}>{currentClue.sponsor.offerText}</Text>
+              </View>
+            ) : null}
+            {currentClue.sponsor.callToAction ? (
+              <Text style={styles.sponsorCTA}>{currentClue.sponsor.callToAction}</Text>
+            ) : null}
+          </View>
+        )}
 
         {/* Hint card */}
         {currentClue.hintText && (
@@ -570,6 +600,15 @@ const styles = StyleSheet.create({
   clueDesc: { color: MUTED, fontSize: 15, lineHeight: 22 },
   unlockMsg: { marginTop: 12, backgroundColor: ACCENT + '18', borderRadius: 8, padding: 10, borderWidth: 1, borderColor: ACCENT + '44' },
   unlockMsgText: { color: ACCENT, fontSize: 13, fontWeight: '500', lineHeight: 18 },
+
+  sponsorStrip: { backgroundColor: SURFACE, borderRadius: 12, borderWidth: 1, borderColor: ACCENT + '44', padding: 14, marginBottom: 12, gap: 6 },
+  sponsorRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  sponsorBadge: { backgroundColor: ACCENT + '22', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, color: ACCENT, fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
+  sponsorName: { color: TEXT, fontSize: 14, fontWeight: '700' },
+  sponsorMessage: { color: MUTED, fontSize: 13, lineHeight: 18 },
+  sponsorOfferRow: { backgroundColor: ACCENT + '18', borderRadius: 6, padding: 8 },
+  sponsorOfferText: { color: ACCENT, fontSize: 13, fontWeight: '600' },
+  sponsorCTA: { color: MUTED, fontSize: 12, fontStyle: 'italic' },
 
   hintCard: { backgroundColor: SURFACE, borderRadius: 12, borderWidth: 1, borderColor: BORDER, borderStyle: 'dashed', padding: 14, alignItems: 'center', marginBottom: 12 },
   hintLabel: { color: MUTED, fontSize: 13, fontWeight: '600' },
