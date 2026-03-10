@@ -55,7 +55,7 @@
 - [x] Expo project setup
 - [x] Player auth (register + login)
 - [x] Hunt discovery screen (list view)
-- [ ] Hunt detail page
+- [x] Hunt detail page
 - [ ] Join hunt flow
 - [ ] Active hunt GPS map (Mapbox)
 - [ ] Proximity-based clue unlock

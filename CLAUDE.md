@@ -16,8 +16,8 @@ hunt tickets, and tourism board contracts.
 
 **Status:** Backend API complete. Admin panel Phase 1 fully complete. Mobile app: auth + hunt discovery screen complete.
 
-**Last completed chunk:** Hunt discovery screen — added `GET /api/v1/player/hunts` player endpoint (ACTIVE hunts only, with clue count, optional city filter, paginated); mobile `/(tabs)/index.tsx` replaced with full FlatList UI: hunt cards (thumbnail, title, city, difficulty badge, free/paid badge, theme tag, clue count, time limit), city search bar, loading skeletons, empty state, error state, pull-to-refresh.
-**Next chunk:** Hunt detail page — tapping a card navigates to `/(hunt)/[id].tsx`; shows full hunt info, clue count, map center preview, and a "Join Hunt" CTA that calls `POST /api/v1/game/sessions`.
+**Last completed chunk:** Hunt detail page — added `GET /api/v1/player/hunts/:id` endpoint; created `app/hunt/[id].tsx` stack screen with cover image, title, city, description, info grid (clues, price, teams, time limit, dates), map coord hint, sponsor banner, sticky "Join Hunt" CTA (calls `POST /api/v1/game/sessions`, shows alert on success); wired `onHuntPress` in discover tab to `router.push('/hunt/:id')`.
+**Next chunk:** Join hunt flow + active hunt GPS map — after joining, navigate to `app/hunt/[id]/active.tsx` showing Mapbox map with player position and first clue proximity indicator.
 
 **Known fix:** Express 5 `ParamsDictionary` types named params as `string | string[]` — always extract with `req.params['key'] as string` in route handlers.
 

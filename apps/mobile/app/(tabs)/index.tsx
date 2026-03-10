@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { playerFetch } from '@/lib/api';
 import type { Hunt, PaginatedData } from '@treasure-hunt/shared';
@@ -147,6 +148,7 @@ function SkeletonCard() {
 
 export default function DiscoverScreen() {
   const { user, logout } = useAuth();
+  const router = useRouter();
 
   const [hunts, setHunts] = useState<HuntWithCount[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -202,10 +204,10 @@ export default function DiscoverScreen() {
     setIsLoading(false);
   }, [fetchHunts]);
 
-  // Placeholder handler — hunt detail comes in the next chunk
-  const onHuntPress = useCallback((_hunt: HuntWithCount) => {
-    // TODO: navigate to hunt detail screen (next chunk)
-  }, []);
+  // Navigate to the hunt detail screen
+  const onHuntPress = useCallback((hunt: HuntWithCount) => {
+    router.push(`/hunt/${hunt.id}`);
+  }, [router]);
 
   // ---------------------------------------------------------------------------
   // Render

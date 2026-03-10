@@ -5,9 +5,11 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
 import { authenticate } from '../middleware/authenticate';
+import { AppError } from '../middleware/errorHandler';
 import type {
   ApiSuccess,
   Hunt,
+  HuntDetail,
   HuntDifficulty,
   HuntTheme,
   HuntType,
@@ -136,6 +138,37 @@ router.get('/hunts', async (req: Request, res: Response, next: NextFunction) => 
         page,
         pageSize,
         hasMore: page * pageSize < total,
+      },
+    };
+    res.status(200).json(response);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /hunts/:id — fetch a single ACTIVE hunt by ID with clue count.
+// Returns 404 if the hunt does not exist or is not ACTIVE.
+router.get('/hunts/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = req.params['id'] as string;
+
+    const hunt = await prisma.hunt.findUnique({
+      where: { id },
+      include: { _count: { select: { clues: true } } },
+    });
+
+    if (!hunt) {
+      throw new AppError('Hunt not found', 404, 'NOT_FOUND');
+    }
+    if (hunt.status !== 'ACTIVE') {
+      throw new AppError('Hunt is not currently active', 404, 'NOT_FOUND');
+    }
+
+    const response: ApiSuccess<HuntDetail & { clueCount: number }> = {
+      success: true,
+      data: {
+        ...toHuntResponse(hunt),
+        clueCount: hunt._count.clues,
       },
     };
     res.status(200).json(response);
