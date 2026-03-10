@@ -14,10 +14,10 @@ hunt tickets, and tourism board contracts.
 
 ## Current Phase: Phase 1 MVP — Mobile Player App (Expo)
 
-**Status:** Backend API complete. Admin panel Phase 1 fully complete. Mobile app bootstrapped with player auth (login + register) complete.
+**Status:** Backend API complete. Admin panel Phase 1 fully complete. Mobile app: auth + hunt discovery screen complete.
 
-**Last completed chunk:** Mobile app setup + player auth — Expo SDK 52 project created with expo-router v4, SecureStore-backed auth (storeToken/getToken/storeUser/getUser), `playerFetch` with 401 auto-refresh via httpOnly cookie, `AuthProvider` context with login/register/logout, login + register screens (dark amber aesthetic), tab shell with redirect guards.
-**Next chunk:** Hunt discovery screen — fetch available hunts from `/api/v1/player/hunts`, display as scrollable card list on the Discover tab (`/(tabs)/index.tsx`).
+**Last completed chunk:** Hunt discovery screen — added `GET /api/v1/player/hunts` player endpoint (ACTIVE hunts only, with clue count, optional city filter, paginated); mobile `/(tabs)/index.tsx` replaced with full FlatList UI: hunt cards (thumbnail, title, city, difficulty badge, free/paid badge, theme tag, clue count, time limit), city search bar, loading skeletons, empty state, error state, pull-to-refresh.
+**Next chunk:** Hunt detail page — tapping a card navigates to `/(hunt)/[id].tsx`; shows full hunt info, clue count, map center preview, and a "Join Hunt" CTA that calls `POST /api/v1/game/sessions`.
 
 **Known fix:** Express 5 `ParamsDictionary` types named params as `string | string[]` — always extract with `req.params['key'] as string` in route handlers.
 

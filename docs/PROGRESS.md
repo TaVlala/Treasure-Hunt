@@ -54,7 +54,7 @@
 ### Mobile Player App (Expo)
 - [x] Expo project setup
 - [x] Player auth (register + login)
-- [ ] Hunt discovery screen (list view)
+- [x] Hunt discovery screen (list view)
 - [ ] Hunt detail page
 - [ ] Join hunt flow
 - [ ] Active hunt GPS map (Mapbox)
