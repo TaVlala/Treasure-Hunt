@@ -14,10 +14,10 @@ hunt tickets, and tourism board contracts.
 
 ## Current Phase: Phase 1 MVP — Mobile Player App (Expo)
 
-**Status:** Backend API complete. Admin panel Phase 1 fully complete. Mobile app: auth + hunt discovery screen complete.
+**Status:** Backend API complete. Admin panel Phase 1 fully complete. Mobile app: auth + discovery + hunt detail + active hunt GPS screen complete.
 
-**Last completed chunk:** Hunt detail page — added `GET /api/v1/player/hunts/:id` endpoint; created `app/hunt/[id].tsx` stack screen with cover image, title, city, description, info grid (clues, price, teams, time limit, dates), map coord hint, sponsor banner, sticky "Join Hunt" CTA (calls `POST /api/v1/game/sessions`, shows alert on success); wired `onHuntPress` in discover tab to `router.push('/hunt/:id')`.
-**Next chunk:** Join hunt flow + active hunt GPS map — after joining, navigate to `app/hunt/[id]/active.tsx` showing Mapbox map with player position and first clue proximity indicator.
+**Last completed chunk:** Join hunt flow + active hunt GPS screen — installed `expo-location`; restructured `app/hunt/[id].tsx` → `app/hunt/[id]/index.tsx` for nested routing; created `app/hunt/[id]/active.tsx` (live GPS tracking, haversine distance, animated proximity ring, clue card, "I'm Here!" submit button, hunt-complete alert + redirect); added `GET /api/v1/player/hunts/:huntId/clues/:clueId` endpoint; detail screen `onJoin` now navigates to active screen via `router.replace`.
+**Next chunk:** Proximity-based clue unlock — polish the active screen with hint reveal (deduct 5 pts), session resume if app closed mid-hunt, and QR scanner support for QR-type clues.
 
 **Known fix:** Express 5 `ParamsDictionary` types named params as `string | string[]` — always extract with `req.params['key'] as string` in route handlers.
 

@@ -19,7 +19,13 @@
     },
     "plugins": [
       "expo-router",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow Treasure Hunt to use your location to find clues nearby."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

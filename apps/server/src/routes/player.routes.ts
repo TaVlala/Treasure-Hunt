@@ -10,6 +10,7 @@ import type {
   ApiSuccess,
   Hunt,
   HuntDetail,
+  Clue,
   HuntDifficulty,
   HuntTheme,
   HuntType,
@@ -146,6 +147,45 @@ router.get('/hunts', async (req: Request, res: Response, next: NextFunction) => 
   }
 });
 
+// Converts a Prisma clue row to the player-safe Clue shape (no answer field)
+type ClueRow = {
+  id: string;
+  huntId: string;
+  orderIndex: number;
+  title: string;
+  description: string;
+  hintText: string | null;
+  clueType: string;
+  imageUrl: string | null;
+  latitude: PrismaDecimal;
+  longitude: PrismaDecimal;
+  proximityRadiusMeters: number;
+  isBonus: boolean;
+  points: number;
+  unlockMessage: string | null;
+  createdAt: Date;
+};
+
+function toClueResponse(c: ClueRow): Clue {
+  return {
+    id: c.id,
+    huntId: c.huntId,
+    orderIndex: c.orderIndex,
+    title: c.title,
+    description: c.description,
+    hintText: c.hintText,
+    clueType: c.clueType.toLowerCase() as Clue['clueType'],
+    imageUrl: c.imageUrl,
+    latitude: c.latitude.toNumber(),
+    longitude: c.longitude.toNumber(),
+    proximityRadiusMeters: c.proximityRadiusMeters,
+    isBonus: c.isBonus,
+    points: c.points,
+    unlockMessage: c.unlockMessage,
+    createdAt: c.createdAt.toISOString(),
+  };
+}
+
 // GET /hunts/:id — fetch a single ACTIVE hunt by ID with clue count.
 // Returns 404 if the hunt does not exist or is not ACTIVE.
 router.get('/hunts/:id', async (req: Request, res: Response, next: NextFunction) => {
@@ -170,6 +210,64 @@ router.get('/hunts/:id', async (req: Request, res: Response, next: NextFunction)
         ...toHuntResponse(hunt),
         clueCount: hunt._count.clues,
       },
+    };
+    res.status(200).json(response);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /hunts/:huntId/clues/:clueId — fetch a single clue by ID for an active hunt.
+// The player must have this clue in an active session (validated via session lookup).
+// Returns player-safe clue shape — no answer field.
+router.get('/hunts/:huntId/clues/:clueId', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const huntId = req.params['huntId'] as string;
+    const clueId = req.params['clueId'] as string;
+    const playerId = req.user!.id;
+
+    // Clue must exist and belong to an active hunt
+    const clue = await prisma.clue.findUnique({
+      where: { id: clueId },
+      select: {
+        id: true,
+        huntId: true,
+        orderIndex: true,
+        title: true,
+        description: true,
+        hintText: true,
+        clueType: true,
+        imageUrl: true,
+        latitude: true,
+        longitude: true,
+        proximityRadiusMeters: true,
+        isBonus: true,
+        points: true,
+        unlockMessage: true,
+        createdAt: true,
+        hunt: { select: { status: true } },
+      },
+    });
+
+    if (!clue || clue.huntId !== huntId) {
+      throw new AppError('Clue not found', 404, 'NOT_FOUND');
+    }
+    if (clue.hunt.status !== 'ACTIVE') {
+      throw new AppError('Hunt is not active', 404, 'NOT_FOUND');
+    }
+
+    // Verify the player has an active session for this hunt
+    const session = await prisma.gameSession.findUnique({
+      where: { huntId_playerId: { huntId, playerId } },
+      select: { id: true, status: true },
+    });
+    if (!session || session.status !== 'ACTIVE') {
+      throw new AppError('No active session for this hunt', 403, 'FORBIDDEN');
+    }
+
+    const response: ApiSuccess<Clue> = {
+      success: true,
+      data: toClueResponse(clue as ClueRow),
     };
     res.status(200).json(response);
   } catch (err) {

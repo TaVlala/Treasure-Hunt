@@ -56,8 +56,8 @@
 - [x] Player auth (register + login)
 - [x] Hunt discovery screen (list view)
 - [x] Hunt detail page
-- [ ] Join hunt flow
-- [ ] Active hunt GPS map (Mapbox)
+- [x] Join hunt flow
+- [x] Active hunt GPS screen (expo-location + proximity ring + clue-by-ID endpoint)
 - [ ] Proximity-based clue unlock
 - [ ] Clue view (text riddle)
 - [ ] QR scanner

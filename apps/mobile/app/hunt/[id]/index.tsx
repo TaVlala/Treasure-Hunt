@@ -1,6 +1,6 @@
 // Hunt detail screen — shows full info for a single active hunt and lets the player join.
 // Navigated to by pushing /hunt/:id from the discover tab.
-// Calls POST /api/v1/game/sessions on join; navigates to active hunt on success (next chunk).
+// On join success navigates to /hunt/:id/active with the new session ID.
 
 import {
   View,
@@ -11,7 +11,6 @@ import {
   ScrollView,
   Image,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState, useEffect, useCallback } from 'react';
@@ -127,11 +126,8 @@ export default function HuntDetailScreen() {
       });
       // TODO: navigate to active hunt GPS map (next chunk)
       // For now show a success alert with session ID
-      Alert.alert(
-        'Hunt started!',
-        `Session created. Your first clue: "${result.currentClue.title}". Active hunt screen coming next.`,
-        [{ text: 'OK' }],
-      );
+      // Navigate to the active hunt GPS screen
+      router.replace(`/hunt/${hunt.id}/active?sessionId=${result.session.id}&huntId=${hunt.id}`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Could not join hunt';
       // ALREADY_JOINED is a recoverable state — surface it clearly
