@@ -58,9 +58,11 @@
 - [x] Hunt detail page
 - [x] Join hunt flow
 - [x] Active hunt GPS screen (expo-location + proximity ring + clue-by-ID endpoint)
-- [ ] Proximity-based clue unlock
-- [ ] Clue view (text riddle)
-- [ ] QR scanner
+- [x] Proximity-based clue unlock (GPS + haversine, animated proximity ring)
+- [x] Hint reveal (POST /hint endpoint, 5pt deduction, session restore on resume)
+- [x] Session resume (detect mid-hunt session on detail screen, continue without re-joining)
+- [x] Clue view (text riddle + hint text in active screen)
+- [x] QR scanner (expo-camera, fullscreen modal, barcode scan submit)
 - [ ] Sponsor clue card (branded content)
 - [ ] Progress tracker
 - [ ] Basic leaderboard view

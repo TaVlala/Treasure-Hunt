@@ -25,6 +25,12 @@
         {
           "locationWhenInUsePermission": "Allow Treasure Hunt to use your location to find clues nearby."
         }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Treasure Hunt to access the camera to scan QR clues."
+        }
       ]
     ],
     "experiments": {

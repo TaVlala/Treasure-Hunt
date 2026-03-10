@@ -10,6 +10,7 @@ import {
   proximityCheckSchema,
   joinHuntSchema,
   submitClueSchema,
+  useHintSchema,
   leaderboardQuerySchema,
 } from '../schemas/game.schemas';
 import type {
@@ -450,6 +451,55 @@ router.get('/sessions/:sessionId', async (req: Request, res: Response, next: Nex
     };
 
     const response: ApiSuccess<SessionWithProgress> = { success: true, data };
+    res.status(200).json(response);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /sessions/:sessionId/hint — marks hintUsed on a clue progress row and deducts
+// HINT_COST_POINTS from the session score. Can only be used once per clue.
+const HINT_COST_POINTS = 5;
+
+router.post('/sessions/:sessionId/hint', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const sessionId = req.params['sessionId'] as string;
+    const playerId = req.user!.id;
+    const { clueId } = useHintSchema.parse(req.body);
+
+    // Session must belong to this player and be ACTIVE
+    const session = await prisma.gameSession.findUnique({ where: { id: sessionId } });
+    if (!session) throw new AppError('Session not found', 404, 'NOT_FOUND');
+    if (session.playerId !== playerId) throw new AppError('Forbidden', 403, 'FORBIDDEN');
+    if (session.status !== 'ACTIVE') throw new AppError('Session is not active', 409, 'SESSION_INACTIVE');
+
+    // Progress must be UNLOCKED and hint not yet used
+    const progress = await prisma.playerProgress.findUnique({
+      where: { sessionId_clueId: { sessionId, clueId } },
+      include: { clue: { select: { hintText: true } } },
+    });
+    if (!progress) throw new AppError('Clue not in this session', 404, 'NOT_FOUND');
+    if (progress.status !== 'UNLOCKED') throw new AppError('Clue is not currently active', 409, 'CLUE_LOCKED');
+    if (progress.hintUsed) throw new AppError('Hint already used for this clue', 409, 'HINT_ALREADY_USED');
+    if (!progress.clue.hintText) throw new AppError('This clue has no hint', 409, 'NO_HINT');
+
+    // Mark hint used and deduct points (floor at 0)
+    const newScore = Math.max(0, session.score - HINT_COST_POINTS);
+    await prisma.$transaction([
+      prisma.playerProgress.update({
+        where: { sessionId_clueId: { sessionId, clueId } },
+        data: { hintUsed: true },
+      }),
+      prisma.gameSession.update({
+        where: { id: sessionId },
+        data: { score: newScore },
+      }),
+    ]);
+
+    const response: ApiSuccess<{ hintText: string; newScore: number; costPoints: number }> = {
+      success: true,
+      data: { hintText: progress.clue.hintText, newScore, costPoints: HINT_COST_POINTS },
+    };
     res.status(200).json(response);
   } catch (err) {
     next(err);

@@ -14,10 +14,10 @@ hunt tickets, and tourism board contracts.
 
 ## Current Phase: Phase 1 MVP — Mobile Player App (Expo)
 
-**Status:** Backend API complete. Admin panel Phase 1 fully complete. Mobile app: auth + discovery + hunt detail + active hunt GPS screen complete.
+**Status:** Backend API complete. Admin panel Phase 1 fully complete. Mobile app: auth + discovery + hunt detail + active hunt GPS screen + hint reveal + session resume + QR scanner complete.
 
-**Last completed chunk:** Join hunt flow + active hunt GPS screen — installed `expo-location`; restructured `app/hunt/[id].tsx` → `app/hunt/[id]/index.tsx` for nested routing; created `app/hunt/[id]/active.tsx` (live GPS tracking, haversine distance, animated proximity ring, clue card, "I'm Here!" submit button, hunt-complete alert + redirect); added `GET /api/v1/player/hunts/:huntId/clues/:clueId` endpoint; detail screen `onJoin` now navigates to active screen via `router.replace`.
-**Next chunk:** Proximity-based clue unlock — polish the active screen with hint reveal (deduct 5 pts), session resume if app closed mid-hunt, and QR scanner support for QR-type clues.
+**Last completed chunk:** Hint reveal + session resume + QR scanner — added `POST /api/v1/game/sessions/:sessionId/hint` (5pt atomic deduction via `$transaction`); added `GET /api/v1/player/hunts/:huntId/my-session`; installed `expo-camera`; rewrote `active.tsx` with hint reveal, QR fullscreen modal (`CameraView`), hint state restore on resume, QR scan debouncing; updated `index.tsx` with parallel session fetch + Resume/Join conditional footer.
+**Next chunk:** Sponsor clue card + progress tracker — show branded sponsor content on active clue card (logo, name, CTA), add clue progress indicator ("Clue 2 of 5") to active screen, and basic leaderboard view screen.
 
 **Known fix:** Express 5 `ParamsDictionary` types named params as `string | string[]` — always extract with `req.params['key'] as string` in route handlers.
 

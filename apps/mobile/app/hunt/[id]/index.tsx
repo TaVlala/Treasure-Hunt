@@ -1,6 +1,6 @@
-// Hunt detail screen — shows full info for a single active hunt and lets the player join.
+// Hunt detail screen — shows full info for a single active hunt and lets the player join or resume.
 // Navigated to by pushing /hunt/:id from the discover tab.
-// On join success navigates to /hunt/:id/active with the new session ID.
+// On join/resume navigates to /hunt/:id/active with the session ID.
 
 import {
   View,
@@ -18,6 +18,7 @@ import { playerFetch } from '@/lib/api';
 import type { Hunt, HuntDetail, JoinHuntResult } from '@treasure-hunt/shared';
 
 type HuntWithCount = HuntDetail & { clueCount: number };
+type ExistingSession = { id: string; cluesFound: number; totalClues: number; score: number };
 
 // ---------------------------------------------------------------------------
 // Design tokens
@@ -97,16 +98,21 @@ export default function HuntDetailScreen() {
   const router = useRouter();
 
   const [hunt, setHunt] = useState<HuntWithCount | null>(null);
+  const [existingSession, setExistingSession] = useState<ExistingSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isJoining, setIsJoining] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch hunt detail on mount
+  // Fetch hunt detail + check for an existing active session in parallel
   useEffect(() => {
     void (async () => {
       try {
-        const data = await playerFetch<HuntWithCount>(`/api/v1/player/hunts/${id}`);
+        const [data, session] = await Promise.all([
+          playerFetch<HuntWithCount>(`/api/v1/player/hunts/${id}`),
+          playerFetch<ExistingSession>(`/api/v1/player/hunts/${id}/my-session`).catch(() => null),
+        ]);
         setHunt(data);
+        setExistingSession(session);
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to load hunt');
       } finally {
@@ -115,7 +121,13 @@ export default function HuntDetailScreen() {
     })();
   }, [id]);
 
-  // Join the hunt — creates a game session
+  // Resume an existing session — navigate straight to active screen
+  const onResume = useCallback(() => {
+    if (!existingSession || !hunt) return;
+    router.replace(`/hunt/${hunt.id}/active?sessionId=${existingSession.id}&huntId=${hunt.id}`);
+  }, [existingSession, hunt, router]);
+
+  // Join the hunt — creates a new game session
   const onJoin = useCallback(async () => {
     if (!hunt) return;
     setIsJoining(true);
@@ -124,13 +136,9 @@ export default function HuntDetailScreen() {
         method: 'POST',
         body: JSON.stringify({ huntId: hunt.id }),
       });
-      // TODO: navigate to active hunt GPS map (next chunk)
-      // For now show a success alert with session ID
-      // Navigate to the active hunt GPS screen
       router.replace(`/hunt/${hunt.id}/active?sessionId=${result.session.id}&huntId=${hunt.id}`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Could not join hunt';
-      // ALREADY_JOINED is a recoverable state — surface it clearly
       Alert.alert('Could not join', msg, [{ text: 'OK' }]);
     } finally {
       setIsJoining(false);
@@ -288,22 +296,35 @@ export default function HuntDetailScreen() {
         </View>
       </ScrollView>
 
-      {/* Sticky bottom CTA */}
+      {/* Sticky bottom CTA — Resume or Join */}
       <View style={styles.footer}>
-        <TouchableOpacity
-          style={[styles.joinBtn, isJoining && styles.joinBtnDisabled]}
-          onPress={() => void onJoin()}
-          disabled={isJoining}
-          activeOpacity={0.8}
-        >
-          {isJoining ? (
-            <ActivityIndicator color="#000" />
-          ) : (
-            <Text style={styles.joinText}>
-              {isFree ? 'Start Hunt — Free' : `Join Hunt · ${priceLabel(hunt)}`}
-            </Text>
-          )}
-        </TouchableOpacity>
+        {existingSession ? (
+          <>
+            <View style={styles.resumeBanner}>
+              <Text style={styles.resumeBannerText}>
+                Hunt in progress — {existingSession.cluesFound}/{existingSession.totalClues} clues · {existingSession.score} pts
+              </Text>
+            </View>
+            <TouchableOpacity style={styles.joinBtn} onPress={onResume} activeOpacity={0.8}>
+              <Text style={styles.joinText}>Resume Hunt →</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <TouchableOpacity
+            style={[styles.joinBtn, isJoining && styles.joinBtnDisabled]}
+            onPress={() => void onJoin()}
+            disabled={isJoining}
+            activeOpacity={0.8}
+          >
+            {isJoining ? (
+              <ActivityIndicator color="#000" />
+            ) : (
+              <Text style={styles.joinText}>
+                {isFree ? 'Start Hunt — Free' : `Join Hunt · ${priceLabel(hunt)}`}
+              </Text>
+            )}
+          </TouchableOpacity>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -530,6 +551,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
     letterSpacing: -0.2,
+  },
+  resumeBanner: {
+    backgroundColor: ACCENT + '18',
+    borderRadius: 8,
+    padding: 8,
+    alignItems: 'center',
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: ACCENT + '44',
+  },
+  resumeBannerText: {
+    color: ACCENT,
+    fontSize: 12,
+    fontWeight: '600',
   },
 
   // Center states

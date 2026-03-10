@@ -1,6 +1,6 @@
-// Active hunt screen — live GPS tracking toward the current clue.
-// Receives sessionId + huntId as search params (set by the detail screen on join).
-// Uses expo-location for real-time position; calculates distance client-side.
+// Active hunt screen — live GPS tracking toward current clue.
+// Supports GPS proximity unlock, QR code scanning, hint reveal, and hunt completion.
+// Receives sessionId + huntId as search params from the detail screen on join/resume.
 
 import {
   View,
@@ -13,10 +13,12 @@ import {
   Alert,
   Animated,
   Easing,
+  Modal,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import * as Location from 'expo-location';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { playerFetch } from '@/lib/api';
 import type {
   Clue,
@@ -35,11 +37,13 @@ const ACCENT = '#f59e0b';
 const TEXT = '#ffffff';
 const MUTED = '#888888';
 const GREEN = '#22c55e';
-const RED = '#ef4444';
+const HINT_COST = 5;
 
 // ---------------------------------------------------------------------------
-// Haversine distance in metres — mirrors the server fallback calculation
+// Pure math helpers
 // ---------------------------------------------------------------------------
+
+// Haversine great-circle distance in metres (mirrors server fallback)
 function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6_371_000;
   const toRad = (d: number) => (d * Math.PI) / 180;
@@ -51,35 +55,13 @@ function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number)
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// ---------------------------------------------------------------------------
-// Compass bearing from player to clue (degrees 0–360, 0 = north)
-// ---------------------------------------------------------------------------
-function bearingDeg(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const toDeg = (r: number) => (r * 180) / Math.PI;
-  const dLng = toRad(lng2 - lng1);
-  const y = Math.sin(dLng) * Math.cos(toRad(lat2));
-  const x =
-    Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) -
-    Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(dLng);
-  return (toDeg(Math.atan2(y, x)) + 360) % 360;
-}
-
-// Converts bearing degrees to a cardinal direction label
-function cardinalLabel(deg: number): string {
-  const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-  return dirs[Math.round(deg / 45) % 8] ?? 'N';
-}
-
-// Formats distance for display (switches to km above 1000 m)
+// Formats distance to value + unit string (switches to km above 1 000 m)
 function fmtDistance(meters: number): { value: string; unit: string } {
-  if (meters >= 1000) {
-    return { value: (meters / 1000).toFixed(1), unit: 'km' };
-  }
+  if (meters >= 1000) return { value: (meters / 1000).toFixed(1), unit: 'km' };
   return { value: Math.round(meters).toString(), unit: 'm' };
 }
 
-// Returns a color based on how close the player is (green < 50m, amber < 200m, red otherwise)
+// Color-codes distance: green = in range, amber = close, grey = far
 function proximityColor(distMeters: number, radiusMeters: number): string {
   if (distMeters <= radiusMeters) return GREEN;
   if (distMeters <= radiusMeters * 3) return ACCENT;
@@ -87,10 +69,8 @@ function proximityColor(distMeters: number, radiusMeters: number): string {
 }
 
 // ---------------------------------------------------------------------------
-// Sub-components
+// Animated proximity ring
 // ---------------------------------------------------------------------------
-
-// Animated pulsing ring — scales from 0.8 to 1 in a loop
 function ProximityRing({
   distanceMeters,
   radiusMeters,
@@ -103,18 +83,8 @@ function ProximityRing({
   useEffect(() => {
     const anim = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulse, {
-          toValue: 1,
-          duration: 900,
-          easing: Easing.inOut(Easing.sine),
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulse, {
-          toValue: 0.85,
-          duration: 900,
-          easing: Easing.inOut(Easing.sine),
-          useNativeDriver: true,
-        }),
+        Animated.timing(pulse, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.sine), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0.85, duration: 900, easing: Easing.inOut(Easing.sine), useNativeDriver: true }),
       ]),
     );
     anim.start();
@@ -122,30 +92,20 @@ function ProximityRing({
   }, [pulse]);
 
   const within = distanceMeters !== null && distanceMeters <= radiusMeters;
-  const ringColor = distanceMeters !== null
-    ? proximityColor(distanceMeters, radiusMeters)
-    : BORDER;
-
-  // Ring size shrinks logarithmically as the player gets closer
+  const ringColor = distanceMeters !== null ? proximityColor(distanceMeters, radiusMeters) : BORDER;
   const ringSize = distanceMeters === null
     ? 180
     : Math.max(80, Math.min(200, 80 + (distanceMeters / radiusMeters) * 120));
 
   return (
-    <Animated.View
-      style={[
-        styles.ring,
-        {
-          width: ringSize,
-          height: ringSize,
-          borderRadius: ringSize / 2,
-          borderColor: ringColor,
-          transform: [{ scale: pulse }],
-          opacity: within ? 1 : 0.7,
-        },
-      ]}
-    >
-      {/* Inner dot */}
+    <Animated.View style={[
+      styles.ring,
+      {
+        width: ringSize, height: ringSize, borderRadius: ringSize / 2,
+        borderColor: ringColor, transform: [{ scale: pulse }],
+        opacity: within ? 1 : 0.7,
+      },
+    ]}>
       <View style={[styles.ringDot, { backgroundColor: ringColor }]} />
     </Animated.View>
   );
@@ -166,6 +126,16 @@ export default function ActiveHuntScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Hint state
+  const [hintRevealed, setHintRevealed] = useState(false);
+  const [hintText, setHintText] = useState<string | null>(null);
+  const [isRevealingHint, setIsRevealingHint] = useState(false);
+
+  // QR scanner state
+  const [showQR, setShowQR] = useState(false);
+  const [qrScanned, setQrScanned] = useState(false);
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+
   // GPS state
   const [locationGranted, setLocationGranted] = useState<boolean | null>(null);
   const [distanceMeters, setDistanceMeters] = useState<number | null>(null);
@@ -180,17 +150,17 @@ export default function ActiveHuntScreen() {
         const data = await playerFetch<SessionWithProgress>(`/api/v1/game/sessions/${sessionId}`);
         setSession(data);
 
-        // The current clue is the one with status 'unlocked'
         const unlockedProgress = data.progress.find((p) => p.status === 'unlocked');
-        if (!unlockedProgress) {
-          // All clues found — hunt already complete
-          setCurrentClue(null);
-        } else {
-          // Fetch full clue detail from the player endpoint
+        if (unlockedProgress) {
           const clue = await playerFetch<Clue>(
             `/api/v1/player/hunts/${huntId}/clues/${unlockedProgress.clueId}`,
           ).catch(() => null);
           setCurrentClue(clue);
+          // Restore hint if already used before (e.g. app reopen mid-hunt)
+          if (unlockedProgress.hintUsed && clue?.hintText) {
+            setHintRevealed(true);
+            setHintText(clue.hintText);
+          }
         }
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to load session');
@@ -201,90 +171,131 @@ export default function ActiveHuntScreen() {
   }, [sessionId, huntId]);
 
   // ---------------------------------------------------------------------------
-  // GPS location tracking
+  // GPS permission + tracking
   // ---------------------------------------------------------------------------
   useEffect(() => {
     void (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setLocationGranted(false);
-        return;
-      }
-      setLocationGranted(true);
+      setLocationGranted(status === 'granted');
     })();
   }, []);
 
-  // Start watching position once we have both permission and a clue
   useEffect(() => {
     if (!locationGranted || !currentClue) return;
 
     void (async () => {
       locationSub.current = await Location.watchPositionAsync(
-        {
-          accuracy: Location.Accuracy.BestForNavigation,
-          distanceInterval: 3, // update every 3 metres of movement
-          timeInterval: 2000,
-        },
+        { accuracy: Location.Accuracy.BestForNavigation, distanceInterval: 3, timeInterval: 2000 },
         (loc) => {
-          const dist = haversineMeters(
-            loc.coords.latitude,
-            loc.coords.longitude,
-            currentClue.latitude,
-            currentClue.longitude,
-          );
-          setDistanceMeters(dist);
+          setDistanceMeters(haversineMeters(
+            loc.coords.latitude, loc.coords.longitude,
+            currentClue.latitude, currentClue.longitude,
+          ));
         },
       );
     })();
 
-    return () => {
-      locationSub.current?.remove();
-    };
+    return () => { locationSub.current?.remove(); };
   }, [locationGranted, currentClue]);
 
+  // Reset transient state when the clue changes
+  useEffect(() => {
+    setHintRevealed(false);
+    setHintText(null);
+    setDistanceMeters(null);
+    setQrScanned(false);
+    setShowQR(false);
+  }, [currentClue?.id]);
+
   // ---------------------------------------------------------------------------
-  // Submit clue as found (GPS method)
+  // Submit clue as found
   // ---------------------------------------------------------------------------
-  const onSubmit = useCallback(async () => {
+  const onSubmit = useCallback(async (method: 'gps' | 'qr_code' = 'gps') => {
     if (!currentClue || !session) return;
     setIsSubmitting(true);
+    setShowQR(false);
     try {
       const result = await playerFetch<SubmitClueResult>(
         `/api/v1/game/sessions/${sessionId}/submit`,
-        {
-          method: 'POST',
-          body: JSON.stringify({ clueId: currentClue.id, method: 'gps' }),
-        },
+        { method: 'POST', body: JSON.stringify({ clueId: currentClue.id, method }) },
       );
 
       if (result.huntComplete) {
-        // Hunt finished — navigate back to discover with celebration
         Alert.alert(
           '🎉 Hunt Complete!',
-          `You found all ${result.session.totalClues} clues!\nFinal score: ${result.session.score} points`,
-          [
-            {
-              text: 'Awesome!',
-              onPress: () => router.replace('/(tabs)'),
-            },
-          ],
+          `You found all ${result.session.totalClues} clues!\nFinal score: ${result.session.score} pts`,
+          [{ text: 'Awesome!', onPress: () => router.replace('/(tabs)') }],
         );
         return;
       }
 
-      // Move to next clue
+      // Load full clue data for the next clue
+      const nextClue = result.nextClue
+        ? await playerFetch<Clue>(
+            `/api/v1/player/hunts/${huntId}/clues/${result.nextClue.id}`,
+          ).catch(() => result.nextClue)
+        : null;
+
       setSession(result.session);
-      setCurrentClue(result.nextClue);
-      setDistanceMeters(null); // reset distance until next location update
+      setCurrentClue(nextClue);
     } catch (e) {
       Alert.alert('Error', e instanceof Error ? e.message : 'Submit failed', [{ text: 'OK' }]);
+      setQrScanned(false);
     } finally {
       setIsSubmitting(false);
     }
-  }, [currentClue, session, sessionId, router]);
+  }, [currentClue, session, sessionId, huntId, router]);
 
   // ---------------------------------------------------------------------------
-  // Loading state
+  // Hint reveal
+  // ---------------------------------------------------------------------------
+  const onRevealHint = useCallback(async () => {
+    if (!currentClue || hintRevealed) return;
+    setIsRevealingHint(true);
+    try {
+      const result = await playerFetch<{ hintText: string; newScore: number; costPoints: number }>(
+        `/api/v1/game/sessions/${sessionId}/hint`,
+        { method: 'POST', body: JSON.stringify({ clueId: currentClue.id }) },
+      );
+      setHintText(result.hintText);
+      setHintRevealed(true);
+      setSession((prev) => prev ? { ...prev, score: result.newScore } : prev);
+    } catch (e) {
+      // HINT_ALREADY_USED — show the text locally without another deduction
+      if (currentClue.hintText) {
+        setHintText(currentClue.hintText);
+        setHintRevealed(true);
+      } else {
+        Alert.alert('Hint', e instanceof Error ? e.message : 'Could not get hint', [{ text: 'OK' }]);
+      }
+    } finally {
+      setIsRevealingHint(false);
+    }
+  }, [currentClue, hintRevealed, sessionId]);
+
+  // ---------------------------------------------------------------------------
+  // QR scanner
+  // ---------------------------------------------------------------------------
+  const onOpenQR = useCallback(async () => {
+    if (!cameraPermission?.granted) {
+      const result = await requestCameraPermission();
+      if (!result.granted) {
+        Alert.alert('Camera required', 'Enable camera access in Settings to scan QR clues.', [{ text: 'OK' }]);
+        return;
+      }
+    }
+    setQrScanned(false);
+    setShowQR(true);
+  }, [cameraPermission, requestCameraPermission]);
+
+  const onBarcodeScanned = useCallback((_event: { data: string }) => {
+    if (qrScanned || isSubmitting) return;
+    setQrScanned(true);
+    void onSubmit('qr_code');
+  }, [qrScanned, isSubmitting, onSubmit]);
+
+  // ---------------------------------------------------------------------------
+  // Terminal states
   // ---------------------------------------------------------------------------
   if (isLoading) {
     return (
@@ -297,16 +308,13 @@ export default function ActiveHuntScreen() {
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Error state
-  // ---------------------------------------------------------------------------
   if (error) {
     return (
       <SafeAreaView style={styles.root}>
         <View style={styles.center}>
-          <Text style={styles.errorIcon}>⚠️</Text>
-          <Text style={styles.errorTitle}>Something went wrong</Text>
-          <Text style={styles.errorBody}>{error}</Text>
+          <Text style={styles.stateIcon}>⚠️</Text>
+          <Text style={styles.stateTitle}>Something went wrong</Text>
+          <Text style={styles.stateBody}>{error}</Text>
           <TouchableOpacity style={styles.accentBtn} onPress={() => router.back()}>
             <Text style={styles.accentBtnText}>Go Back</Text>
           </TouchableOpacity>
@@ -315,19 +323,13 @@ export default function ActiveHuntScreen() {
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Location permission denied
-  // ---------------------------------------------------------------------------
   if (locationGranted === false) {
     return (
       <SafeAreaView style={styles.root}>
         <View style={styles.center}>
-          <Text style={styles.errorIcon}>📍</Text>
-          <Text style={styles.errorTitle}>Location required</Text>
-          <Text style={styles.errorBody}>
-            Treasure Hunt needs your location to find nearby clues. Please enable it in
-            Settings and reopen the hunt.
-          </Text>
+          <Text style={styles.stateIcon}>📍</Text>
+          <Text style={styles.stateTitle}>Location required</Text>
+          <Text style={styles.stateBody}>Enable location access in Settings to track your position during the hunt.</Text>
           <TouchableOpacity style={styles.accentBtn} onPress={() => router.back()}>
             <Text style={styles.accentBtnText}>Go Back</Text>
           </TouchableOpacity>
@@ -336,16 +338,13 @@ export default function ActiveHuntScreen() {
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // No current clue (all found / unexpected state)
-  // ---------------------------------------------------------------------------
   if (!currentClue || !session) {
     return (
       <SafeAreaView style={styles.root}>
         <View style={styles.center}>
-          <Text style={styles.errorIcon}>🎉</Text>
-          <Text style={styles.errorTitle}>Hunt Complete!</Text>
-          <Text style={styles.errorBody}>All clues have been found.</Text>
+          <Text style={styles.stateIcon}>🎉</Text>
+          <Text style={styles.stateTitle}>Hunt Complete!</Text>
+          <Text style={styles.stateBody}>All clues have been found.</Text>
           <TouchableOpacity style={styles.accentBtn} onPress={() => router.replace('/(tabs)')}>
             <Text style={styles.accentBtnText}>Back to Discover</Text>
           </TouchableOpacity>
@@ -355,16 +354,16 @@ export default function ActiveHuntScreen() {
   }
 
   // ---------------------------------------------------------------------------
-  // Main hunt UI
+  // Derived state for main UI
   // ---------------------------------------------------------------------------
-  const withinRange =
-    distanceMeters !== null && distanceMeters <= currentClue.proximityRadiusMeters;
+  const isQRClue = currentClue.clueType === 'qr_code';
+  const withinRange = !isQRClue && distanceMeters !== null && distanceMeters <= currentClue.proximityRadiusMeters;
   const dist = distanceMeters !== null ? fmtDistance(distanceMeters) : null;
-  const distColor =
-    distanceMeters !== null
-      ? proximityColor(distanceMeters, currentClue.proximityRadiusMeters)
-      : MUTED;
+  const distColor = distanceMeters !== null ? proximityColor(distanceMeters, currentClue.proximityRadiusMeters) : MUTED;
   const clueIndex = session.progress.filter((p) => p.status === 'found').length;
+  const currentProgress = session.progress.find((p) => p.clueId === currentClue.id);
+  const hintAlreadyUsed = currentProgress?.hintUsed ?? false;
+  const canSubmitGPS = withinRange && !isSubmitting;
 
   return (
     <SafeAreaView style={styles.root}>
@@ -374,9 +373,7 @@ export default function ActiveHuntScreen() {
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
         <View style={styles.progressPill}>
-          <Text style={styles.progressText}>
-            Clue {clueIndex + 1} of {session.totalClues}
-          </Text>
+          <Text style={styles.progressText}>Clue {clueIndex + 1} of {session.totalClues}</Text>
         </View>
         <View style={styles.scorePill}>
           <Text style={styles.scoreText}>{session.score} pts</Text>
@@ -385,49 +382,43 @@ export default function ActiveHuntScreen() {
 
       {/* Progress bar */}
       <View style={styles.progressBarTrack}>
-        <View
-          style={[
-            styles.progressBarFill,
-            { width: `${(clueIndex / session.totalClues) * 100}%` },
-          ]}
-        />
+        <View style={[styles.progressBarFill, { width: `${(clueIndex / session.totalClues) * 100}%` }]} />
       </View>
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Proximity ring */}
-        <View style={styles.ringContainer}>
-          <ProximityRing
-            distanceMeters={distanceMeters}
-            radiusMeters={currentClue.proximityRadiusMeters}
-          />
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
-          {/* Distance readout */}
-          {dist ? (
-            <View style={styles.distanceBlock}>
-              <Text style={[styles.distanceValue, { color: distColor }]}>{dist.value}</Text>
-              <Text style={[styles.distanceUnit, { color: distColor }]}>{dist.unit}</Text>
+        {/* GPS proximity ring (hidden for QR clues) */}
+        {!isQRClue && (
+          <>
+            <View style={styles.ringContainer}>
+              <ProximityRing distanceMeters={distanceMeters} radiusMeters={currentClue.proximityRadiusMeters} />
+              {dist ? (
+                <View style={styles.distanceBlock}>
+                  <Text style={[styles.distanceValue, { color: distColor }]}>{dist.value}</Text>
+                  <Text style={[styles.distanceUnit, { color: distColor }]}>{dist.unit}</Text>
+                </View>
+              ) : (
+                <View style={styles.distanceBlock}>
+                  <ActivityIndicator color={MUTED} size="small" />
+                  <Text style={styles.gpsLabel}>Getting GPS...</Text>
+                </View>
+              )}
+              <Text style={styles.radiusLabel}>Within {currentClue.proximityRadiusMeters}m to unlock</Text>
             </View>
-          ) : (
-            <View style={styles.distanceBlock}>
-              <ActivityIndicator color={MUTED} size="small" />
-              <Text style={styles.gpsLabel}>Getting GPS...</Text>
-            </View>
-          )}
+            {withinRange && (
+              <View style={styles.inRangeBanner}>
+                <Text style={styles.inRangeText}>✓ You're in range!</Text>
+              </View>
+            )}
+          </>
+        )}
 
-          {/* Radius label */}
-          <Text style={styles.radiusLabel}>
-            Within {currentClue.proximityRadiusMeters}m to unlock
-          </Text>
-        </View>
-
-        {/* Status banner */}
-        {withinRange && (
-          <View style={styles.inRangeBanner}>
-            <Text style={styles.inRangeText}>✓ You're in range!</Text>
+        {/* QR prompt (shown for QR clues) */}
+        {isQRClue && (
+          <View style={styles.qrPromptBlock}>
+            <Text style={styles.qrPromptIcon}>📷</Text>
+            <Text style={styles.qrPromptTitle}>Scan the QR code</Text>
+            <Text style={styles.qrPromptBody}>Find the QR code at this location and scan it to unlock the clue.</Text>
           </View>
         )}
 
@@ -435,7 +426,7 @@ export default function ActiveHuntScreen() {
         <View style={styles.clueCard}>
           <View style={styles.clueCardHeader}>
             <View style={styles.clueTypeTag}>
-              <Text style={styles.clueTypeText}>{currentClue.clueType.replace('_', ' ')}</Text>
+              <Text style={styles.clueTypeText}>{currentClue.clueType.replace(/_/g, ' ')}</Text>
             </View>
             {currentClue.isBonus && (
               <View style={styles.bonusTag}>
@@ -443,45 +434,91 @@ export default function ActiveHuntScreen() {
               </View>
             )}
           </View>
-
           <Text style={styles.clueTitle}>{currentClue.title}</Text>
           <Text style={styles.clueDesc}>{currentClue.description}</Text>
-
-          {currentClue.unlockMessage && withinRange && (
+          {currentClue.unlockMessage && (withinRange || isQRClue) && (
             <View style={styles.unlockMsg}>
               <Text style={styles.unlockMsgText}>💡 {currentClue.unlockMessage}</Text>
             </View>
           )}
         </View>
 
-        {/* Hint */}
+        {/* Hint card */}
         {currentClue.hintText && (
-          <TouchableOpacity style={styles.hintCard}>
-            <Text style={styles.hintLabel}>Tap to reveal hint (−5 pts)</Text>
-          </TouchableOpacity>
+          hintRevealed ? (
+            <View style={styles.hintRevealed}>
+              <Text style={styles.hintRevealedLabel}>Hint</Text>
+              <Text style={styles.hintRevealedText}>{hintText}</Text>
+              {hintAlreadyUsed && <Text style={styles.hintUsedNote}>−{HINT_COST} pts deducted</Text>}
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.hintCard}
+              onPress={() => void onRevealHint()}
+              disabled={isRevealingHint}
+            >
+              {isRevealingHint
+                ? <ActivityIndicator color={MUTED} size="small" />
+                : <Text style={styles.hintLabel}>
+                    {hintAlreadyUsed ? 'Show hint (already used)' : `Reveal hint (−${HINT_COST} pts)`}
+                  </Text>
+              }
+            </TouchableOpacity>
+          )
         )}
       </ScrollView>
 
       {/* Submit CTA */}
       <View style={styles.footer}>
-        <TouchableOpacity
-          style={[
-            styles.submitBtn,
-            (!withinRange || isSubmitting) && styles.submitBtnDisabled,
-          ]}
-          onPress={() => void onSubmit()}
-          disabled={!withinRange || isSubmitting}
-          activeOpacity={0.8}
-        >
-          {isSubmitting ? (
-            <ActivityIndicator color={withinRange ? '#000' : MUTED} />
-          ) : (
-            <Text style={[styles.submitText, !withinRange && styles.submitTextDisabled]}>
-              {withinRange ? "I'm Here! 📍" : `${dist ? `${dist.value} ${dist.unit} away` : 'Locating...'}`}
-            </Text>
-          )}
-        </TouchableOpacity>
+        {isQRClue ? (
+          <TouchableOpacity
+            style={[styles.submitBtn, isSubmitting && styles.submitBtnDisabled]}
+            onPress={() => void onOpenQR()}
+            disabled={isSubmitting}
+            activeOpacity={0.8}
+          >
+            {isSubmitting
+              ? <ActivityIndicator color="#000" />
+              : <Text style={styles.submitText}>Scan QR Code 📷</Text>
+            }
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={[styles.submitBtn, !canSubmitGPS && styles.submitBtnDisabled]}
+            onPress={() => void onSubmit('gps')}
+            disabled={!canSubmitGPS}
+            activeOpacity={0.8}
+          >
+            {isSubmitting
+              ? <ActivityIndicator color={canSubmitGPS ? '#000' : MUTED} />
+              : <Text style={[styles.submitText, !canSubmitGPS && styles.submitTextDisabled]}>
+                  {withinRange ? "I'm Here! 📍" : dist ? `${dist.value} ${dist.unit} away` : 'Locating...'}
+                </Text>
+            }
+          </TouchableOpacity>
+        )}
       </View>
+
+      {/* QR scanner modal */}
+      <Modal visible={showQR} animationType="slide" onRequestClose={() => setShowQR(false)}>
+        <SafeAreaView style={styles.qrModal}>
+          <View style={styles.qrHeader}>
+            <Text style={styles.qrHeaderTitle}>Scan QR Code</Text>
+            <TouchableOpacity style={styles.qrCloseBtn} onPress={() => setShowQR(false)}>
+              <Text style={styles.qrCloseText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+          <CameraView
+            style={styles.qrCamera}
+            facing="back"
+            barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+            onBarcodeScanned={qrScanned ? undefined : onBarcodeScanned}
+          />
+          <View style={styles.qrFooter}>
+            <Text style={styles.qrFooterText}>Point the camera at a QR code to unlock the clue.</Text>
+          </View>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -491,277 +528,76 @@ export default function ActiveHuntScreen() {
 // ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: BG,
-  },
+  root: { flex: 1, backgroundColor: BG },
   scroll: { flex: 1 },
   scrollContent: { paddingBottom: 120, padding: 20 },
 
-  // Header
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 10,
-    gap: 8,
-  },
-  backBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: SURFACE,
-  },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10, gap: 8 },
+  backBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: BORDER, backgroundColor: SURFACE },
   backText: { color: MUTED, fontSize: 12, fontWeight: '600' },
-  progressPill: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  progressText: {
-    color: TEXT,
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: -0.2,
-  },
-  scorePill: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: ACCENT + '22',
-    borderWidth: 1,
-    borderColor: ACCENT + '55',
-  },
+  progressPill: { flex: 1, alignItems: 'center' },
+  progressText: { color: TEXT, fontSize: 13, fontWeight: '700', letterSpacing: -0.2 },
+  scorePill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: ACCENT + '22', borderWidth: 1, borderColor: ACCENT + '55' },
   scoreText: { color: ACCENT, fontSize: 12, fontWeight: '700' },
 
-  // Progress bar
-  progressBarTrack: {
-    height: 3,
-    backgroundColor: SURFACE2,
-    marginHorizontal: 0,
-  },
-  progressBarFill: {
-    height: 3,
-    backgroundColor: ACCENT,
-  },
+  progressBarTrack: { height: 3, backgroundColor: SURFACE2 },
+  progressBarFill: { height: 3, backgroundColor: ACCENT },
 
-  // Proximity ring
-  ringContainer: {
-    alignItems: 'center',
-    paddingVertical: 32,
-    gap: 16,
-  },
-  ring: {
-    borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  ringDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  distanceBlock: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 4,
-  },
-  distanceValue: {
-    fontSize: 52,
-    fontWeight: '800',
-    letterSpacing: -2,
-    lineHeight: 56,
-  },
-  distanceUnit: {
-    fontSize: 20,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  gpsLabel: {
-    color: MUTED,
-    fontSize: 14,
-    fontWeight: '500',
-    marginTop: 4,
-  },
-  radiusLabel: {
-    color: MUTED,
-    fontSize: 12,
-    fontWeight: '500',
-  },
+  ringContainer: { alignItems: 'center', paddingVertical: 32, gap: 16 },
+  ring: { borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  ringDot: { width: 10, height: 10, borderRadius: 5 },
+  distanceBlock: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
+  distanceValue: { fontSize: 52, fontWeight: '800', letterSpacing: -2, lineHeight: 56 },
+  distanceUnit: { fontSize: 20, fontWeight: '600', marginBottom: 4 },
+  gpsLabel: { color: MUTED, fontSize: 14, fontWeight: '500', marginTop: 4 },
+  radiusLabel: { color: MUTED, fontSize: 12, fontWeight: '500' },
 
-  // In-range banner
-  inRangeBanner: {
-    backgroundColor: GREEN + '22',
-    borderWidth: 1,
-    borderColor: GREEN + '55',
-    borderRadius: 12,
-    padding: 12,
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  inRangeText: {
-    color: GREEN,
-    fontSize: 15,
-    fontWeight: '700',
-  },
+  inRangeBanner: { backgroundColor: GREEN + '22', borderWidth: 1, borderColor: GREEN + '55', borderRadius: 12, padding: 12, alignItems: 'center', marginBottom: 16 },
+  inRangeText: { color: GREEN, fontSize: 15, fontWeight: '700' },
 
-  // Clue card
-  clueCard: {
-    backgroundColor: SURFACE,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: BORDER,
-    padding: 16,
-    marginBottom: 12,
-  },
-  clueCardHeader: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 10,
-  },
-  clueTypeTag: {
-    backgroundColor: SURFACE2,
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderWidth: 1,
-    borderColor: BORDER,
-  },
-  clueTypeText: {
-    color: MUTED,
-    fontSize: 10,
-    fontWeight: '600',
-    textTransform: 'capitalize',
-  },
-  bonusTag: {
-    backgroundColor: ACCENT + '22',
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderWidth: 1,
-    borderColor: ACCENT + '55',
-  },
-  bonusText: {
-    color: ACCENT,
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  clueTitle: {
-    color: TEXT,
-    fontSize: 20,
-    fontWeight: '800',
-    letterSpacing: -0.4,
-    marginBottom: 8,
-  },
-  clueDesc: {
-    color: MUTED,
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  unlockMsg: {
-    marginTop: 12,
-    backgroundColor: ACCENT + '18',
-    borderRadius: 8,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: ACCENT + '44',
-  },
-  unlockMsgText: {
-    color: ACCENT,
-    fontSize: 13,
-    fontWeight: '500',
-    lineHeight: 18,
-  },
+  qrPromptBlock: { alignItems: 'center', paddingVertical: 40, gap: 12, marginBottom: 8 },
+  qrPromptIcon: { fontSize: 56, opacity: 0.8 },
+  qrPromptTitle: { color: TEXT, fontSize: 20, fontWeight: '800', letterSpacing: -0.4 },
+  qrPromptBody: { color: MUTED, fontSize: 14, textAlign: 'center', lineHeight: 20, paddingHorizontal: 20 },
 
-  // Hint card
-  hintCard: {
-    backgroundColor: SURFACE,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderStyle: 'dashed',
-    padding: 14,
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  hintLabel: {
-    color: MUTED,
-    fontSize: 13,
-    fontWeight: '600',
-  },
+  clueCard: { backgroundColor: SURFACE, borderRadius: 14, borderWidth: 1, borderColor: BORDER, padding: 16, marginBottom: 12 },
+  clueCardHeader: { flexDirection: 'row', gap: 8, marginBottom: 10 },
+  clueTypeTag: { backgroundColor: SURFACE2, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: BORDER },
+  clueTypeText: { color: MUTED, fontSize: 10, fontWeight: '600', textTransform: 'capitalize' },
+  bonusTag: { backgroundColor: ACCENT + '22', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: ACCENT + '55' },
+  bonusText: { color: ACCENT, fontSize: 10, fontWeight: '700' },
+  clueTitle: { color: TEXT, fontSize: 20, fontWeight: '800', letterSpacing: -0.4, marginBottom: 8 },
+  clueDesc: { color: MUTED, fontSize: 15, lineHeight: 22 },
+  unlockMsg: { marginTop: 12, backgroundColor: ACCENT + '18', borderRadius: 8, padding: 10, borderWidth: 1, borderColor: ACCENT + '44' },
+  unlockMsgText: { color: ACCENT, fontSize: 13, fontWeight: '500', lineHeight: 18 },
 
-  // Footer submit button
-  footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 16,
-    paddingBottom: 28,
-    backgroundColor: BG,
-    borderTopWidth: 1,
-    borderTopColor: BORDER,
-  },
-  submitBtn: {
-    backgroundColor: ACCENT,
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  submitBtnDisabled: {
-    backgroundColor: SURFACE2,
-    borderWidth: 1,
-    borderColor: BORDER,
-  },
-  submitText: {
-    color: '#000',
-    fontSize: 16,
-    fontWeight: '800',
-    letterSpacing: -0.2,
-  },
-  submitTextDisabled: {
-    color: MUTED,
-  },
+  hintCard: { backgroundColor: SURFACE, borderRadius: 12, borderWidth: 1, borderColor: BORDER, borderStyle: 'dashed', padding: 14, alignItems: 'center', marginBottom: 12 },
+  hintLabel: { color: MUTED, fontSize: 13, fontWeight: '600' },
+  hintRevealed: { backgroundColor: SURFACE, borderRadius: 12, borderWidth: 1, borderColor: ACCENT + '44', padding: 14, marginBottom: 12 },
+  hintRevealedLabel: { color: ACCENT, fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 },
+  hintRevealedText: { color: TEXT, fontSize: 14, lineHeight: 20 },
+  hintUsedNote: { color: MUTED, fontSize: 11, marginTop: 6 },
 
-  // Center states
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 40,
-  },
-  loadingText: {
-    color: MUTED,
-    fontSize: 14,
-    marginTop: 12,
-  },
-  errorIcon: { fontSize: 40, marginBottom: 14 },
-  errorTitle: {
-    color: TEXT,
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 8,
-    letterSpacing: -0.3,
-  },
-  errorBody: {
-    color: MUTED,
-    fontSize: 14,
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 24,
-  },
-  accentBtn: {
-    backgroundColor: ACCENT,
-    borderRadius: 10,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-  },
-  accentBtnText: {
-    color: '#000',
-    fontWeight: '700',
-    fontSize: 14,
-  },
+  footer: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 16, paddingBottom: 28, backgroundColor: BG, borderTopWidth: 1, borderTopColor: BORDER },
+  submitBtn: { backgroundColor: ACCENT, borderRadius: 14, paddingVertical: 16, alignItems: 'center', justifyContent: 'center' },
+  submitBtnDisabled: { backgroundColor: SURFACE2, borderWidth: 1, borderColor: BORDER },
+  submitText: { color: '#000', fontSize: 16, fontWeight: '800', letterSpacing: -0.2 },
+  submitTextDisabled: { color: MUTED },
+
+  qrModal: { flex: 1, backgroundColor: BG },
+  qrHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: BORDER },
+  qrHeaderTitle: { color: TEXT, fontSize: 17, fontWeight: '700' },
+  qrCloseBtn: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8, borderWidth: 1, borderColor: BORDER, backgroundColor: SURFACE },
+  qrCloseText: { color: MUTED, fontSize: 13, fontWeight: '600' },
+  qrCamera: { flex: 1 },
+  qrFooter: { padding: 24, alignItems: 'center' },
+  qrFooterText: { color: MUTED, fontSize: 13, textAlign: 'center', lineHeight: 19 },
+
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
+  loadingText: { color: MUTED, fontSize: 14, marginTop: 12 },
+  stateIcon: { fontSize: 40, marginBottom: 14 },
+  stateTitle: { color: TEXT, fontSize: 18, fontWeight: '700', marginBottom: 8, letterSpacing: -0.3 },
+  stateBody: { color: MUTED, fontSize: 14, textAlign: 'center', lineHeight: 20, marginBottom: 24 },
+  accentBtn: { backgroundColor: ACCENT, borderRadius: 10, paddingHorizontal: 24, paddingVertical: 12 },
+  accentBtnText: { color: '#000', fontWeight: '700', fontSize: 14 },
 });

@@ -217,6 +217,52 @@ router.get('/hunts/:id', async (req: Request, res: Response, next: NextFunction)
   }
 });
 
+// GET /hunts/:huntId/my-session — returns the player's active session for a hunt, or 404.
+// Used by the detail screen to detect an in-progress hunt and show "Resume" instead of "Join".
+router.get('/hunts/:huntId/my-session', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const huntId = req.params['huntId'] as string;
+    const playerId = req.user!.id;
+
+    const session = await prisma.gameSession.findUnique({
+      where: { huntId_playerId: { huntId, playerId } },
+      include: { progress: true },
+    });
+
+    if (!session || session.status !== 'ACTIVE') {
+      throw new AppError('No active session', 404, 'NOT_FOUND');
+    }
+
+    const progressList = session.progress.map((p) => ({
+      clueId: p.clueId,
+      status: p.status.toLowerCase(),
+      foundAt: p.foundAt ? p.foundAt.toISOString() : null,
+      pointsEarned: p.pointsEarned,
+      hintUsed: p.hintUsed,
+    }));
+
+    const data = {
+      id: session.id,
+      huntId: session.huntId,
+      playerId: session.playerId,
+      teamId: session.teamId,
+      status: session.status.toLowerCase(),
+      startedAt: session.startedAt.toISOString(),
+      completedAt: session.completedAt ? session.completedAt.toISOString() : null,
+      score: session.score,
+      cluesFound: session.cluesFound,
+      totalClues: session.totalClues,
+      timeTakenSecs: session.timeTakenSecs,
+      progress: progressList,
+    };
+
+    const response: ApiSuccess<typeof data> = { success: true, data };
+    res.status(200).json(response);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /hunts/:huntId/clues/:clueId — fetch a single clue by ID for an active hunt.
 // The player must have this clue in an active session (validated via session lookup).
 // Returns player-safe clue shape — no answer field.
