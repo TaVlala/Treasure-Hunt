@@ -1,6 +1,6 @@
-// Prize detail screen — shows full prize info + sponsor location after tapping "Claim Prize".
+// Prize detail screen — shows full prize info + sponsor location and a tap-to-generate QR code.
 // Navigated to from complete.tsx with huntId, prizeId, and sessionId params.
-// QR code redemption will be added in the next chunk.
+// Calls POST /api/v1/player/prizes/:prizeId/redeem (idempotent) to generate the redemption.
 
 import {
   View,
@@ -15,8 +15,9 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState, useEffect } from 'react';
+import QRCode from 'react-native-qrcode-svg';
 import { playerFetch } from '@/lib/api';
-import type { SponsorPrize, PrizeType } from '@treasure-hunt/shared';
+import type { SponsorPrize, PrizeType, Redemption } from '@treasure-hunt/shared';
 
 // ---------------------------------------------------------------------------
 // Design tokens
@@ -42,6 +43,97 @@ const PRIZE_TYPE_META: Record<PrizeType, { label: string; color: string; icon: s
 };
 
 // ---------------------------------------------------------------------------
+// QR section — renders either the code, a generate button, or an error
+// ---------------------------------------------------------------------------
+function QRSection({
+  redemption,
+  isGenerating,
+  generateError,
+  onGenerate,
+}: {
+  redemption: Redemption | null;
+  isGenerating: boolean;
+  generateError: string | null;
+  onGenerate: () => void;
+}) {
+  if (redemption) {
+    // Format expiry as readable date
+    const expiryDate = new Date(redemption.expiresAt).toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+    const isRedeemed = redemption.status === 'redeemed';
+    const isExpired = redemption.status === 'expired';
+
+    return (
+      <View style={styles.qrSection}>
+        <Text style={styles.sectionLabel}>Redemption QR Code</Text>
+
+        {/* Status badge when not in GENERATED state */}
+        {(isRedeemed || isExpired) && (
+          <View style={[styles.statusBadge, isRedeemed ? styles.statusRedeemed : styles.statusExpired]}>
+            <Text style={styles.statusBadgeText}>
+              {isRedeemed ? '✓ Already Redeemed' : '✕ Expired'}
+            </Text>
+          </View>
+        )}
+
+        {/* QR code on a white background card */}
+        <View style={styles.qrCard}>
+          <View style={styles.qrWrapper}>
+            <QRCode
+              value={redemption.qrCode}
+              size={200}
+              backgroundColor="#ffffff"
+              color="#000000"
+            />
+          </View>
+          <Text style={styles.qrCode}>{redemption.qrCode}</Text>
+          <Text style={styles.qrExpiry}>Valid until {expiryDate}</Text>
+        </View>
+
+        <Text style={styles.qrInstruction}>
+          Show this QR code to the sponsor at their location to redeem your prize.
+        </Text>
+      </View>
+    );
+  }
+
+  // Not yet generated
+  return (
+    <View style={styles.qrSection}>
+      <Text style={styles.sectionLabel}>Redemption QR Code</Text>
+
+      <View style={styles.qrGenerateCard}>
+        <Text style={styles.qrGenerateIcon}>📲</Text>
+        <Text style={styles.qrGenerateTitle}>Ready to claim your prize?</Text>
+        <Text style={styles.qrGenerateBody}>
+          Generate a unique QR code to show the sponsor when you visit their location.
+        </Text>
+
+        {generateError ? (
+          <Text style={styles.qrGenerateError}>{generateError}</Text>
+        ) : null}
+
+        <TouchableOpacity
+          style={[styles.generateBtn, isGenerating && styles.generateBtnDisabled]}
+          onPress={onGenerate}
+          activeOpacity={0.8}
+          disabled={isGenerating}
+        >
+          {isGenerating ? (
+            <ActivityIndicator color="#000" size="small" />
+          ) : (
+            <Text style={styles.generateBtnText}>Generate QR Code</Text>
+          )}
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Screen
 // ---------------------------------------------------------------------------
 
@@ -57,10 +149,14 @@ export default function PrizeScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [redemption, setRedemption] = useState<Redemption | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
+
+  // Fetch prize details on mount
   useEffect(() => {
     void (async () => {
       try {
-        // Fetch all earned prizes and find the one matching prizeId
         const prizes = await playerFetch<SponsorPrize[]>(
           `/api/v1/player/hunts/${huntId}/prizes?sessionId=${sessionId}`,
         );
@@ -74,6 +170,23 @@ export default function PrizeScreen() {
       }
     })();
   }, [huntId, prizeId, sessionId]);
+
+  // Call POST /redeem — idempotent, safe to call multiple times
+  async function handleGenerate() {
+    setIsGenerating(true);
+    setGenerateError(null);
+    try {
+      const result = await playerFetch<Redemption>(`/api/v1/player/prizes/${prizeId}/redeem`, {
+        method: 'POST',
+        body: JSON.stringify({ sessionId }),
+      });
+      setRedemption(result);
+    } catch (e) {
+      setGenerateError(e instanceof Error ? e.message : 'Could not generate QR code');
+    } finally {
+      setIsGenerating(false);
+    }
+  }
 
   // Opens sponsor website in the device browser
   function handleVisitSponsor() {
@@ -172,7 +285,6 @@ export default function PrizeScreen() {
           </View>
         ) : null}
 
-        {/* Divider */}
         <View style={styles.divider} />
 
         {/* Sponsor info */}
@@ -205,20 +317,15 @@ export default function PrizeScreen() {
           ) : null}
         </View>
 
-        {/* Divider */}
         <View style={styles.divider} />
 
-        {/* QR redemption placeholder — coming in next update */}
-        <View style={styles.qrSection}>
-          <View style={styles.qrPlaceholder}>
-            <Text style={styles.qrIcon}>📲</Text>
-            <Text style={styles.qrTitle}>Redemption QR Code</Text>
-            <Text style={styles.qrBody}>
-              Show this screen to the sponsor to redeem your prize.
-              Tap-to-generate QR codes are coming soon.
-            </Text>
-          </View>
-        </View>
+        {/* QR code section */}
+        <QRSection
+          redemption={redemption}
+          isGenerating={isGenerating}
+          generateError={generateError}
+          onGenerate={handleGenerate}
+        />
 
         {/* Terms */}
         {prize.termsConditions ? (
@@ -265,12 +372,7 @@ const styles = StyleSheet.create({
   },
   grandBannerText: { color: '#000', fontSize: 13, fontWeight: '800', letterSpacing: 0.5 },
 
-  prizeImage: {
-    width: '100%',
-    height: 200,
-    borderRadius: 16,
-    backgroundColor: SURFACE2,
-  },
+  prizeImage: { width: '100%', height: 200, borderRadius: 16, backgroundColor: SURFACE2 },
   prizeImagePlaceholder: {
     width: '100%',
     height: 160,
@@ -346,20 +448,57 @@ const styles = StyleSheet.create({
   },
   websiteBtnText: { color: ACCENT, fontSize: 14, fontWeight: '700' },
 
-  qrSection: { },
-  qrPlaceholder: {
+  // QR section
+  qrSection: { gap: 12 },
+
+  statusBadge: { borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6, alignSelf: 'flex-start' },
+  statusRedeemed: { backgroundColor: GREEN + '22' },
+  statusExpired: { backgroundColor: '#ef444422' },
+  statusBadgeText: { fontSize: 12, fontWeight: '700', color: TEXT },
+
+  qrCard: {
     backgroundColor: SURFACE,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: BORDER,
-    borderStyle: 'dashed',
-    padding: 28,
+    padding: 24,
+    alignItems: 'center',
+    gap: 12,
+  },
+  qrWrapper: {
+    backgroundColor: '#ffffff',
+    padding: 12,
+    borderRadius: 12,
+  },
+  qrCode: { color: MUTED, fontSize: 11, fontFamily: 'monospace', letterSpacing: 1 },
+  qrExpiry: { color: MUTED, fontSize: 12 },
+  qrInstruction: { color: MUTED, fontSize: 13, textAlign: 'center', lineHeight: 19 },
+
+  qrGenerateCard: {
+    backgroundColor: SURFACE,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
+    padding: 24,
     alignItems: 'center',
     gap: 10,
   },
-  qrIcon: { fontSize: 40 },
-  qrTitle: { color: TEXT, fontSize: 16, fontWeight: '700' },
-  qrBody: { color: MUTED, fontSize: 13, textAlign: 'center', lineHeight: 19 },
+  qrGenerateIcon: { fontSize: 40 },
+  qrGenerateTitle: { color: TEXT, fontSize: 16, fontWeight: '700' },
+  qrGenerateBody: { color: MUTED, fontSize: 13, textAlign: 'center', lineHeight: 19 },
+  qrGenerateError: { color: '#ef4444', fontSize: 13, textAlign: 'center' },
+
+  generateBtn: {
+    backgroundColor: ACCENT,
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    alignItems: 'center',
+    marginTop: 4,
+    minWidth: 180,
+  },
+  generateBtnDisabled: { opacity: 0.6 },
+  generateBtnText: { color: '#000', fontSize: 15, fontWeight: '800' },
 
   termsSection: { gap: 4 },
   termsText: { color: MUTED, fontSize: 12, lineHeight: 18 },

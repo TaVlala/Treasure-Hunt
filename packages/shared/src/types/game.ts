@@ -56,6 +56,20 @@ export interface SessionWithProgress extends GameSession {
   progress: ClueProgress[];
 }
 
+// Prize redemption record — returned by POST /api/v1/player/prizes/:prizeId/redeem
+export type RedemptionStatus = 'generated' | 'redeemed' | 'expired';
+
+export interface Redemption {
+  id: string;
+  prizeId: string;
+  playerId: string;
+  sessionId: string;
+  qrCode: string;    // unique token the sponsor scans to confirm redemption
+  status: RedemptionStatus;
+  expiresAt: string; // ISO datetime string
+  createdAt: string;
+}
+
 // Single entry in a hunt leaderboard
 export interface LeaderboardEntry {
   rank: number;

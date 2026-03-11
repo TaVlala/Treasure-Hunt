@@ -82,8 +82,8 @@
 ### Backend
 - [x] GET /api/v1/player/hunts/:huntId/prizes — returns prizes earned by player in a completed session
 - [ ] Prize creation + management endpoints (admin)
-- [ ] Prize redemption QR generation
-- [ ] Prize redemption validation endpoint
+- [x] Prize redemption QR generation (POST /player/prizes/:prizeId/redeem — idempotent, UUID qrCode, 90-day expiry)
+- [ ] Prize redemption validation endpoint (sponsor scans QR → marks REDEEMED)
 - [ ] Team creation + joining + team sessions
 - [ ] Stripe: ticket purchase flow
 - [ ] Stripe: webhook handling
@@ -113,7 +113,7 @@
 - [ ] Hint system (costs points)
 - [x] Prize gallery (prize cards on completion screen, grand prize highlight, "Claim Prize" CTA)
 - [x] Prize detail screen (sponsor info, how-to-redeem, QR placeholder)
-- [ ] Prize redemption QR screen (generate unique QR code per redemption)
+- [x] Prize redemption QR screen (tap-to-generate QR, white QR card, redeemed/expired status badges)
 - [ ] Push notification handling
 - [ ] Offline mode (cached clue content)
 - [ ] Hunt history + achievements

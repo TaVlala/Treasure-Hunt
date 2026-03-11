@@ -16,8 +16,8 @@ hunt tickets, and tourism board contracts.
 
 **Status:** Phase 1 fully complete and merged to main. Starting Phase 2: prizes, Stripe tickets, push notifications, team play, public landing pages.
 
-**Last completed chunk:** Prize gallery on completion screen — `GET /api/v1/player/hunts/:huntId/prizes` endpoint added; prize gallery section in `complete.tsx` shows prize cards (grand prize with gold crown, type badge, sponsor name, claim CTA); prize detail screen at `hunt/[id]/prize/[prizeId].tsx` shows full info + sponsor + QR placeholder. Branch: `feature/prize-gallery`.
-**Next chunk:** Prize redemption QR — `POST /api/v1/player/prizes/:prizeId/redeem` generates a unique `Redemption` record with a QR code string; prize detail screen shows tap-to-reveal QR code the player shows at the sponsor's location.
+**Last completed chunk:** Prize redemption QR — `POST /api/v1/player/prizes/:prizeId/redeem` (idempotent, UUID qrCode, 90-day expiry, redemptionLimit guard) added to player routes; `Redemption`/`RedemptionStatus` types added to shared package; `react-native-svg` + `react-native-qrcode-svg` installed; prize detail screen now has tap-to-generate QR flow with white QR card, status badges, and expiry display. Branch: `feature/prize-gallery`.
+**Next chunk:** Prize redemption validation — admin/sponsor endpoint `POST /api/v1/admin/redemptions/:qrCode/validate` that marks a Redemption as REDEEMED; or move to Stripe ticket purchase flow.
 
 **Known fix:** Express 5 `ParamsDictionary` types named params as `string | string[]` — always extract with `req.params['key'] as string` in route handlers.
 

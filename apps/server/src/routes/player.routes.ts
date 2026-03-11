@@ -3,6 +3,7 @@
 // Base path: /api/v1/player (registered in index.ts).
 
 import { Router, Request, Response, NextFunction } from 'express';
+import { z } from 'zod';
 import { prisma } from '../config/database';
 import { authenticate } from '../middleware/authenticate';
 import { AppError } from '../middleware/errorHandler';
@@ -21,6 +22,8 @@ import type {
   PaginatedData,
   SponsorPrize,
   PrizeType,
+  Redemption,
+  RedemptionStatus,
 } from '@treasure-hunt/shared';
 
 const router = Router();
@@ -431,6 +434,105 @@ router.get('/hunts/:huntId/prizes', async (req: Request, res: Response, next: Ne
 
     const response: ApiSuccess<SponsorPrize[]> = { success: true, data };
     res.status(200).json(response);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Request body schema for prize redemption
+const redeemBody = z.object({ sessionId: z.string().uuid() });
+
+// POST /prizes/:prizeId/redeem — generate (or return existing) redemption QR for a prize.
+// Idempotent per player+prize: calling twice returns the same Redemption record.
+// Validates that the player's session is complete and they met the minCluesFound threshold.
+router.post('/prizes/:prizeId/redeem', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const prizeId = req.params['prizeId'] as string;
+    const playerId = req.user!.id;
+
+    const parsed = redeemBody.safeParse(req.body);
+    if (!parsed.success) {
+      throw new AppError('sessionId (UUID) is required in request body', 400, 'BAD_REQUEST');
+    }
+    const { sessionId } = parsed.data;
+
+    // Load prize with its hunt so we can validate session ownership
+    const prize = await prisma.sponsorPrize.findUnique({
+      where: { id: prizeId },
+      select: {
+        id: true,
+        huntId: true,
+        minCluesFound: true,
+        redemptionLimit: true,
+        redemptionsUsed: true,
+      },
+    });
+    if (!prize) throw new AppError('Prize not found', 404, 'NOT_FOUND');
+
+    // Validate session belongs to this player, matches the hunt, and is completed
+    const session = await prisma.gameSession.findFirst({
+      where: { id: sessionId, huntId: prize.huntId, playerId },
+      select: { cluesFound: true, status: true },
+    });
+    if (!session) throw new AppError('Session not found', 404, 'NOT_FOUND');
+    if (session.status !== 'COMPLETED') {
+      throw new AppError('Hunt session is not completed', 400, 'BAD_REQUEST');
+    }
+    if (session.cluesFound < prize.minCluesFound) {
+      throw new AppError('Not enough clues found to earn this prize', 403, 'FORBIDDEN');
+    }
+
+    // Return existing redemption if this player already claimed this prize
+    const existing = await prisma.redemption.findFirst({
+      where: { prizeId, playerId },
+    });
+    if (existing) {
+      const data: Redemption = {
+        id: existing.id,
+        prizeId: existing.prizeId,
+        playerId: existing.playerId,
+        sessionId: existing.sessionId,
+        qrCode: existing.qrCode,
+        status: existing.status.toLowerCase() as RedemptionStatus,
+        expiresAt: existing.expiresAt.toISOString(),
+        createdAt: existing.createdAt.toISOString(),
+      };
+      return res.status(200).json({ success: true, data } as ApiSuccess<Redemption>);
+    }
+
+    // Check redemption limit before creating a new record
+    if (prize.redemptionLimit !== null && prize.redemptionsUsed >= prize.redemptionLimit) {
+      throw new AppError('This prize has reached its redemption limit', 409, 'CONFLICT');
+    }
+
+    // Create redemption + increment counter atomically
+    const EXPIRY_DAYS = 90;
+    const expiresAt = new Date(Date.now() + EXPIRY_DAYS * 24 * 60 * 60 * 1000);
+    const qrCode = `TH-${crypto.randomUUID()}`;
+
+    const [redemption] = await prisma.$transaction([
+      prisma.redemption.create({
+        data: { prizeId, playerId, sessionId, qrCode, expiresAt },
+      }),
+      prisma.sponsorPrize.update({
+        where: { id: prizeId },
+        data: { redemptionsUsed: { increment: 1 } },
+      }),
+    ]);
+
+    const data: Redemption = {
+      id: redemption.id,
+      prizeId: redemption.prizeId,
+      playerId: redemption.playerId,
+      sessionId: redemption.sessionId,
+      qrCode: redemption.qrCode,
+      status: redemption.status.toLowerCase() as RedemptionStatus,
+      expiresAt: redemption.expiresAt.toISOString(),
+      createdAt: redemption.createdAt.toISOString(),
+    };
+
+    const response: ApiSuccess<Redemption> = { success: true, data };
+    res.status(201).json(response);
   } catch (err) {
     next(err);
   }
