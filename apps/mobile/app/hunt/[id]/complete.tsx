@@ -1,5 +1,5 @@
 // Hunt completion screen — shown after the last clue is submitted.
-// Fetches final session stats + leaderboard rank and displays a celebration UI.
+// Fetches final session stats, leaderboard rank, and earned prizes; displays a celebration UI.
 // Receives sessionId + huntId as route params from active.tsx on hunt completion.
 
 import {
@@ -12,11 +12,12 @@ import {
   ActivityIndicator,
   Animated,
   Easing,
+  Image,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState, useEffect, useRef } from 'react';
 import { playerFetch } from '@/lib/api';
-import type { SessionWithProgress, LeaderboardEntry } from '@treasure-hunt/shared';
+import type { SessionWithProgress, LeaderboardEntry, SponsorPrize, PrizeType } from '@treasure-hunt/shared';
 
 // ---------------------------------------------------------------------------
 // Design tokens
@@ -28,6 +29,18 @@ const BORDER = '#242424';
 const ACCENT = '#f59e0b';
 const TEXT = '#ffffff';
 const MUTED = '#888888';
+const GREEN = '#22c55e';
+
+// ---------------------------------------------------------------------------
+// Prize type metadata
+// ---------------------------------------------------------------------------
+const PRIZE_TYPE_META: Record<PrizeType, { label: string; color: string }> = {
+  discount: { label: 'Discount', color: '#22c55e' },
+  free_item: { label: 'Free Item', color: '#3b82f6' },
+  experience: { label: 'Experience', color: ACCENT },
+  gift_card: { label: 'Gift Card', color: '#a855f7' },
+  merch: { label: 'Merchandise', color: '#64748b' },
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -89,6 +102,83 @@ function StatCard({ label, value, accent }: { label: string; value: string; acce
 }
 
 // ---------------------------------------------------------------------------
+// Prize card
+// ---------------------------------------------------------------------------
+function PrizeCard({
+  prize,
+  onClaim,
+}: {
+  prize: SponsorPrize;
+  onClaim: (prize: SponsorPrize) => void;
+}) {
+  const meta = PRIZE_TYPE_META[prize.prizeType];
+  const isGrand = prize.isGrandPrize;
+
+  return (
+    <View style={[styles.prizeCard, isGrand && styles.prizeCardGrand]}>
+      {/* Grand prize crown banner */}
+      {isGrand && (
+        <View style={styles.grandBanner}>
+          <Text style={styles.grandBannerText}>👑 Grand Prize</Text>
+        </View>
+      )}
+
+      <View style={styles.prizeCardInner}>
+        {/* Optional prize image */}
+        {prize.imageUrl ? (
+          <Image source={{ uri: prize.imageUrl }} style={styles.prizeImage} resizeMode="cover" />
+        ) : (
+          <View style={styles.prizeImagePlaceholder}>
+            <Text style={styles.prizeImagePlaceholderIcon}>🎁</Text>
+          </View>
+        )}
+
+        <View style={styles.prizeInfo}>
+          {/* Type badge + sponsor */}
+          <View style={styles.prizeTopRow}>
+            <View style={[styles.prizeBadge, { backgroundColor: meta.color + '22' }]}>
+              <Text style={[styles.prizeBadgeText, { color: meta.color }]}>{meta.label}</Text>
+            </View>
+            {prize.valueDescription ? (
+              <Text style={styles.prizeValue}>{prize.valueDescription}</Text>
+            ) : null}
+          </View>
+
+          {/* Title */}
+          <Text style={styles.prizeTitle}>{prize.title}</Text>
+
+          {/* Description */}
+          {prize.description ? (
+            <Text style={styles.prizeDescription} numberOfLines={2}>
+              {prize.description}
+            </Text>
+          ) : null}
+
+          {/* Sponsor name */}
+          <Text style={styles.prizeSponsor}>📍 {prize.sponsor.businessName}</Text>
+
+          {/* Expiry warning */}
+          {prize.expiryDate ? (
+            <Text style={styles.prizeExpiry}>Expires {prize.expiryDate}</Text>
+          ) : null}
+        </View>
+      </View>
+
+      {/* Claim button */}
+      <TouchableOpacity
+        style={[styles.claimBtn, isGrand && styles.claimBtnGrand]}
+        onPress={() => onClaim(prize)}
+        activeOpacity={0.8}
+      >
+        <Text style={[styles.claimBtnText, isGrand && styles.claimBtnTextGrand]}>
+          Claim Prize →
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Screen
 // ---------------------------------------------------------------------------
 
@@ -99,6 +189,7 @@ export default function CompleteScreen() {
   const [session, setSession] = useState<SessionWithProgress | null>(null);
   const [myEntry, setMyEntry] = useState<LeaderboardEntry | null>(null);
   const [totalPlayers, setTotalPlayers] = useState(0);
+  const [prizes, setPrizes] = useState<SponsorPrize[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -109,15 +200,19 @@ export default function CompleteScreen() {
   useEffect(() => {
     void (async () => {
       try {
-        // Fetch session + leaderboard in parallel
-        const [sess, entries] = await Promise.all([
+        // Fetch session, leaderboard, and prizes in parallel
+        const [sess, entries, earnedPrizes] = await Promise.all([
           playerFetch<SessionWithProgress>(`/api/v1/game/sessions/${sessionId}`),
           playerFetch<LeaderboardEntry[]>(`/api/v1/game/hunts/${huntId}/leaderboard?limit=200`),
+          playerFetch<SponsorPrize[]>(
+            `/api/v1/player/hunts/${huntId}/prizes?sessionId=${sessionId}`,
+          ).catch(() => [] as SponsorPrize[]), // prizes are optional — don't block on failure
         ]);
         setSession(sess);
         setTotalPlayers(entries.length);
         const found = entries.find((e) => e.playerId === sess.playerId);
         setMyEntry(found ?? null);
+        setPrizes(earnedPrizes);
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Could not load results');
       } finally {
@@ -135,6 +230,11 @@ export default function CompleteScreen() {
       ]).start();
     }
   }, [isLoading, error, fadeAnim, slideAnim]);
+
+  // Navigate to the prize detail / claim screen
+  function handleClaim(prize: SponsorPrize) {
+    router.push(`/hunt/${huntId}/prize/${prize.id}?sessionId=${sessionId}`);
+  }
 
   // ---------------------------------------------------------------------------
   // Loading state
@@ -238,6 +338,24 @@ export default function CompleteScreen() {
             </View>
           )}
 
+          {/* Prize gallery — only shown when prizes are available */}
+          {prizes.length > 0 && (
+            <View style={styles.prizeSection}>
+              <View style={styles.prizeSectionHeader}>
+                <Text style={styles.prizeSectionTitle}>🎁 Your Prizes</Text>
+                <Text style={styles.prizeSectionSub}>
+                  {prizes.length === 1
+                    ? 'You unlocked 1 prize'
+                    : `You unlocked ${prizes.length} prizes`}
+                </Text>
+              </View>
+
+              {prizes.map((prize) => (
+                <PrizeCard key={prize.id} prize={prize} onClaim={handleClaim} />
+              ))}
+            </View>
+          )}
+
           {/* CTA buttons */}
           <View style={styles.btnStack}>
             <TouchableOpacity
@@ -333,6 +451,71 @@ const styles = StyleSheet.create({
   },
   rankBannerGold: { backgroundColor: ACCENT + '18', borderColor: ACCENT + '55' },
   rankBannerText: { color: TEXT, fontSize: 15, fontWeight: '700', textAlign: 'center' },
+
+  // Prize gallery
+  prizeSection: { marginBottom: 28 },
+  prizeSectionHeader: { marginBottom: 14, gap: 4 },
+  prizeSectionTitle: { color: TEXT, fontSize: 20, fontWeight: '800', letterSpacing: -0.5 },
+  prizeSectionSub: { color: MUTED, fontSize: 13 },
+
+  prizeCard: {
+    backgroundColor: SURFACE,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
+    marginBottom: 12,
+    overflow: 'hidden',
+  },
+  prizeCardGrand: {
+    borderColor: ACCENT + '66',
+    backgroundColor: ACCENT + '08',
+  },
+
+  grandBanner: {
+    backgroundColor: ACCENT,
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+  },
+  grandBannerText: { color: '#000', fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
+
+  prizeCardInner: { flexDirection: 'row', padding: 14, gap: 12 },
+
+  prizeImage: { width: 72, height: 72, borderRadius: 10, backgroundColor: SURFACE2 },
+  prizeImagePlaceholder: {
+    width: 72,
+    height: 72,
+    borderRadius: 10,
+    backgroundColor: SURFACE2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  prizeImagePlaceholderIcon: { fontSize: 28 },
+
+  prizeInfo: { flex: 1, gap: 5 },
+  prizeTopRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  prizeBadge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
+  prizeBadgeText: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  prizeValue: { color: GREEN, fontSize: 12, fontWeight: '700' },
+
+  prizeTitle: { color: TEXT, fontSize: 15, fontWeight: '800', letterSpacing: -0.2, lineHeight: 20 },
+  prizeDescription: { color: MUTED, fontSize: 12, lineHeight: 17 },
+  prizeSponsor: { color: MUTED, fontSize: 12, fontWeight: '600', marginTop: 2 },
+  prizeExpiry: { color: '#ef4444', fontSize: 11, fontWeight: '600' },
+
+  claimBtn: {
+    marginHorizontal: 14,
+    marginBottom: 14,
+    backgroundColor: SURFACE2,
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  claimBtnGrand: { backgroundColor: ACCENT, borderColor: ACCENT },
+  claimBtnText: { color: TEXT, fontSize: 14, fontWeight: '700' },
+  claimBtnTextGrand: { color: '#000' },
 
   btnStack: { gap: 12 },
   primaryBtn: {

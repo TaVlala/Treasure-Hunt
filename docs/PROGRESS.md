@@ -80,7 +80,8 @@
 ## Phase 2 — First Live Public Hunt
 
 ### Backend
-- [ ] Prize creation + management endpoints
+- [x] GET /api/v1/player/hunts/:huntId/prizes — returns prizes earned by player in a completed session
+- [ ] Prize creation + management endpoints (admin)
 - [ ] Prize redemption QR generation
 - [ ] Prize redemption validation endpoint
 - [ ] Team creation + joining + team sessions
@@ -110,8 +111,9 @@
 - [ ] Team creation + join flow
 - [ ] All clue types (image, photo challenge)
 - [ ] Hint system (costs points)
-- [ ] Prize gallery
-- [ ] Prize redemption QR screen
+- [x] Prize gallery (prize cards on completion screen, grand prize highlight, "Claim Prize" CTA)
+- [x] Prize detail screen (sponsor info, how-to-redeem, QR placeholder)
+- [ ] Prize redemption QR screen (generate unique QR code per redemption)
 - [ ] Push notification handling
 - [ ] Offline mode (cached clue content)
 - [ ] Hunt history + achievements

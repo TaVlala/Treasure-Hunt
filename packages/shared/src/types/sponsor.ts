@@ -3,6 +3,33 @@
 
 export type SponsorTier = 'basic' | 'featured' | 'prize';
 
+export type PrizeType = 'discount' | 'free_item' | 'experience' | 'gift_card' | 'merch';
+
+// Minimal sponsor info embedded in prize responses (player-safe)
+export interface PrizeSponsor {
+  id: string;
+  businessName: string;
+  logoUrl: string | null;
+  address: string;
+  websiteUrl: string | null;
+}
+
+// A prize the player has earned — returned by GET /api/v1/player/hunts/:huntId/prizes
+export interface SponsorPrize {
+  id: string;
+  huntId: string;
+  title: string;
+  description: string | null;
+  prizeType: PrizeType;
+  valueDescription: string | null;
+  expiryDate: string | null; // ISO date string YYYY-MM-DD
+  termsConditions: string | null;
+  imageUrl: string | null;
+  isGrandPrize: boolean;
+  minCluesFound: number;
+  sponsor: PrizeSponsor;
+}
+
 export type SponsorStatus = 'active' | 'paused' | 'expired';
 
 export interface Sponsor {

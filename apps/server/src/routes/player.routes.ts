@@ -19,6 +19,8 @@ import type {
   TeamMode,
   HuntStatus,
   PaginatedData,
+  SponsorPrize,
+  PrizeType,
 } from '@treasure-hunt/shared';
 
 const router = Router();
@@ -342,6 +344,92 @@ router.get('/hunts/:huntId/clues/:clueId', async (req: Request, res: Response, n
       success: true,
       data: { ...toClueResponse(clue as ClueRow), sponsor },
     };
+    res.status(200).json(response);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /hunts/:huntId/prizes — returns prizes the player has earned in a completed session.
+// Requires sessionId query param to look up how many clues the player found.
+// Only returns prizes where minCluesFound <= session.cluesFound.
+router.get('/hunts/:huntId/prizes', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const huntId = req.params['huntId'] as string;
+    const playerId = req.user!.id;
+    const sessionId = typeof req.query['sessionId'] === 'string' ? req.query['sessionId'] : undefined;
+
+    if (!sessionId) {
+      throw new AppError('sessionId query param is required', 400, 'BAD_REQUEST');
+    }
+
+    // Fetch the session — must belong to this player and hunt, and be completed
+    const session = await prisma.gameSession.findFirst({
+      where: { id: sessionId, huntId, playerId },
+      select: { cluesFound: true, status: true },
+    });
+
+    if (!session) {
+      throw new AppError('Session not found', 404, 'NOT_FOUND');
+    }
+    if (session.status !== 'COMPLETED') {
+      throw new AppError('Hunt session is not completed', 400, 'BAD_REQUEST');
+    }
+
+    // Return prizes the player qualifies for (minCluesFound threshold met)
+    const prizes = await prisma.sponsorPrize.findMany({
+      where: {
+        huntId,
+        minCluesFound: { lte: session.cluesFound },
+      },
+      orderBy: [{ isGrandPrize: 'desc' }, { minCluesFound: 'desc' }],
+      select: {
+        id: true,
+        huntId: true,
+        title: true,
+        description: true,
+        prizeType: true,
+        valueDescription: true,
+        expiryDate: true,
+        termsConditions: true,
+        imageUrl: true,
+        isGrandPrize: true,
+        minCluesFound: true,
+        sponsor: {
+          select: {
+            id: true,
+            businessName: true,
+            logoUrl: true,
+            address: true,
+            websiteUrl: true,
+          },
+        },
+      },
+    });
+
+    // Map Prisma rows to the shared SponsorPrize shape
+    const data: SponsorPrize[] = prizes.map((p) => ({
+      id: p.id,
+      huntId: p.huntId,
+      title: p.title,
+      description: p.description,
+      prizeType: p.prizeType.toLowerCase() as PrizeType,
+      valueDescription: p.valueDescription,
+      expiryDate: p.expiryDate ? p.expiryDate.toISOString().split('T')[0]! : null,
+      termsConditions: p.termsConditions,
+      imageUrl: p.imageUrl,
+      isGrandPrize: p.isGrandPrize,
+      minCluesFound: p.minCluesFound,
+      sponsor: {
+        id: p.sponsor.id,
+        businessName: p.sponsor.businessName,
+        logoUrl: p.sponsor.logoUrl,
+        address: p.sponsor.address,
+        websiteUrl: p.sponsor.websiteUrl,
+      },
+    }));
+
+    const response: ApiSuccess<SponsorPrize[]> = { success: true, data };
     res.status(200).json(response);
   } catch (err) {
     next(err);
