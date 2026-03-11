@@ -87,7 +87,9 @@
 - [ ] Team creation + joining + team sessions
 - [x] Stripe: ticket purchase flow (POST /stripe/checkout/:huntId → Checkout Session URL)
 - [x] Stripe: webhook handling (POST /stripe/webhook, raw body, creates GameSession + Payment atomically)
+- [ ] Stripe: native PaymentSheet — Apple Pay + Google Pay (@stripe/stripe-react-native, POST /stripe/payment-sheet/:huntId, payment_intent.succeeded webhook) — planned, not started
 - [x] Push notifications (Expo Push) — device token saved on login/restore, notifications sent on clue found + hunt complete
+- [x] TypeScript: 0 errors (fixed SponsorClue join table pattern in clue admin, fixed early return in player routes)
 - [ ] Analytics event tracking
 - [ ] Sponsor analytics endpoints
 - [ ] Revenue summary endpoint

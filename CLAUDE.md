@@ -16,8 +16,9 @@ hunt tickets, and tourism board contracts.
 
 **Status:** Phase 1 fully complete and merged to main. Starting Phase 2: prizes, Stripe tickets, push notifications, team play, public landing pages.
 
-**Last completed chunk:** Push notifications (Expo Push) — `expo-notifications@~0.29.0` installed. `lib/notifications.ts` registers device push token (requests permission, creates Android channel). `AuthContext` calls `syncPushToken()` on login, register, and app restore. `POST /api/v1/player/device-token` saves token to `users.push_token`. `push.service.ts` fires Expo Push API HTTP call. `game.routes.ts` sends notification on clue found and hunt complete. Migration: `add_push_token`. Branch: `feature/push-notifications`.
-**Next chunk:** Analytics event tracking — record clue_found + hunt_complete events, or team play (team creation + joining + team sessions).
+**Last completed chunk:** TypeScript fixes — `clue.admin.routes.ts`: `sponsorId` is not a direct Clue column (lives in `SponsorClue` join table); updated `ClueRow` type, all Prisma queries now include `sponsorClue`, `toCreateData`/`toUpdateData` no longer pass `sponsorId`, POST/PATCH handlers upsert/delete `SponsorClue` correctly. `player.routes.ts`: split `return res.json()` into `res.json(); return` to fix TS7030. `npx tsc --noEmit` → 0 errors.
+
+**Planned next chunk (approved, not started):** Native Stripe PaymentSheet (Apple Pay + Google Pay) — `@stripe/stripe-react-native`, `POST /stripe/payment-sheet/:huntId` (PaymentIntent), `payment_intent.succeeded` webhook, `<StripeProvider>` in `_layout.tsx`, replace browser flow with `initPaymentSheet` + `presentPaymentSheet`. Requires EAS build to test (not Expo Go).
 
 **Known fix:** Express 5 `ParamsDictionary` types named params as `string | string[]` — always extract with `req.params['key'] as string` in route handlers.
 
@@ -43,7 +44,10 @@ See `docs/DECISIONS.md` for reasoning behind each decision.
 
 ## Known Issues / Technical Debt
 
-None yet — project has not started development.
+- `prisma generate` must be re-run whenever `schema.prisma` changes (Prisma DLL locked by running server — stop preview server first)
+- `SponsorClue` is a join table (not a direct FK on `Clue`) — sponsor linking in clue create/update must upsert/delete `SponsorClue` separately
+- Push notifications require a physical device + EAS build (not Expo Go)
+- Native Stripe PaymentSheet (`@stripe/stripe-react-native`) also requires EAS build
 
 ## Commands to Run Locally
 
