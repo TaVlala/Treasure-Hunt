@@ -538,4 +538,33 @@ router.post('/prizes/:prizeId/redeem', async (req: Request, res: Response, next:
   }
 });
 
+// Request body schema for device token registration
+const deviceTokenBody = z.object({
+  token: z.string().min(1).max(500),
+});
+
+// POST /device-token — saves or updates the player's Expo push token.
+// Called on app start and after login. Silently overwrites any previous token.
+router.post('/device-token', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const playerId = req.user!.id;
+
+    const parsed = deviceTokenBody.safeParse(req.body);
+    if (!parsed.success) {
+      throw new AppError('token (string) is required in request body', 400, 'BAD_REQUEST');
+    }
+    const { token } = parsed.data;
+
+    await prisma.user.update({
+      where: { id: playerId },
+      data: { pushToken: token },
+    });
+
+    const response: ApiSuccess<{ ok: boolean }> = { success: true, data: { ok: true } };
+    res.status(200).json(response);
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

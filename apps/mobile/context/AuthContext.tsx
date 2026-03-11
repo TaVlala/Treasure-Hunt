@@ -4,6 +4,7 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { playerFetch } from '@/lib/api';
 import { storeToken, storeUser, getToken, getUser, clearAuth } from '@/lib/auth';
+import { registerForPushNotifications } from '@/lib/notifications';
 import type { AuthUser, User } from '@treasure-hunt/shared';
 
 interface AuthState {
@@ -27,6 +28,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Registers the device push token with the server. Fire-and-forget; never throws.
+  async function syncPushToken(): Promise<void> {
+    try {
+      const token = await registerForPushNotifications();
+      if (!token) return;
+      await playerFetch('/api/v1/player/device-token', {
+        method: 'POST',
+        body: JSON.stringify({ token }),
+      });
+    } catch {
+      // Non-fatal — notification permission may be denied or device is a simulator
+    }
+  }
+
   // On mount: restore user from SecureStore if a token exists
   useEffect(() => {
     async function restore() {
@@ -34,6 +49,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const [token, stored] = await Promise.all([getToken(), getUser()]);
         if (token && stored) {
           setUser(stored);
+          // Re-sync push token in case it rotated since last session
+          void syncPushToken();
         }
       } finally {
         setIsLoading(false);
@@ -51,6 +68,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await storeToken(data.accessToken);
     await storeUser(data);
     setUser(data);
+    void syncPushToken();
   }, []);
 
   // Registers a new player account; persists token + user to SecureStore
@@ -66,6 +84,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await storeToken(data.accessToken);
       await storeUser(data);
       setUser(data);
+      void syncPushToken();
     },
     [],
   );

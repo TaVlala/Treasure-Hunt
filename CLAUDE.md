@@ -16,8 +16,8 @@ hunt tickets, and tourism board contracts.
 
 **Status:** Phase 1 fully complete and merged to main. Starting Phase 2: prizes, Stripe tickets, push notifications, team play, public landing pages.
 
-**Last completed chunk:** Stripe ticket purchase — `stripe.routes.ts` added with `POST /stripe/checkout/:huntId` (creates Checkout Session, player auth), `POST /stripe/webhook` (raw body, signature verified, creates Payment + GameSession + PlayerProgress atomically, idempotent), `GET /stripe/success|cancel` (HTML pages). `expo-web-browser` + `stripe` installed. Hunt detail screen: PAID hunts show "Buy Ticket · $X.XX" → opens Stripe in browser → polls `my-session` for up to 18s → navigates to active screen. Branch: `feature/stripe-tickets`.
-**Next chunk:** Push notifications (Expo Push) — register device token on login/app start, send notification when hunt completes or a clue is found nearby.
+**Last completed chunk:** Push notifications (Expo Push) — `expo-notifications@~0.29.0` installed. `lib/notifications.ts` registers device push token (requests permission, creates Android channel). `AuthContext` calls `syncPushToken()` on login, register, and app restore. `POST /api/v1/player/device-token` saves token to `users.push_token`. `push.service.ts` fires Expo Push API HTTP call. `game.routes.ts` sends notification on clue found and hunt complete. Migration: `add_push_token`. Branch: `feature/push-notifications`.
+**Next chunk:** Analytics event tracking — record clue_found + hunt_complete events, or team play (team creation + joining + team sessions).
 
 **Known fix:** Express 5 `ParamsDictionary` types named params as `string | string[]` — always extract with `req.params['key'] as string` in route handlers.
 

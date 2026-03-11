@@ -6,6 +6,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
 import { AppError } from '../middleware/errorHandler';
 import { authenticate } from '../middleware/authenticate';
+import { sendPushNotification } from '../services/push.service';
 import {
   proximityCheckSchema,
   joinHuntSchema,
@@ -291,9 +292,13 @@ router.post(
       const body = submitClueSchema.parse(req.body);
 
       // Load session — must belong to this player and be ACTIVE
+      // Also fetch the player's push token so we can notify after the event
       const session = await prisma.gameSession.findUnique({
         where: { id: sessionId },
-        include: { hunt: { select: { id: true } } },
+        include: {
+          hunt: { select: { id: true, title: true } },
+          player: { select: { pushToken: true } },
+        },
       });
       if (!session) {
         throw new AppError('Session not found', 404, 'NOT_FOUND');
@@ -389,6 +394,24 @@ router.post(
 
         return [prog, sess];
       });
+
+      // Fire-and-forget push notification — does not block the response
+      const pushToken = session.player.pushToken;
+      if (isLastClue) {
+        void sendPushNotification(
+          pushToken,
+          'Hunt Complete! 🏆',
+          `You scored ${updatedSession.score} points. Check your prizes!`,
+          { sessionId, huntId: session.huntId },
+        );
+      } else {
+        void sendPushNotification(
+          pushToken,
+          'Clue Found! 🗺️',
+          `${progress.clue.title} — keep going, next clue unlocked!`,
+          { sessionId, huntId: session.huntId },
+        );
+      }
 
       const clueProgressResponse: ClueProgress = {
         clueId: updatedProgress.clueId,

@@ -87,7 +87,7 @@
 - [ ] Team creation + joining + team sessions
 - [x] Stripe: ticket purchase flow (POST /stripe/checkout/:huntId → Checkout Session URL)
 - [x] Stripe: webhook handling (POST /stripe/webhook, raw body, creates GameSession + Payment atomically)
-- [ ] Push notifications (Expo Push)
+- [x] Push notifications (Expo Push) — device token saved on login/restore, notifications sent on clue found + hunt complete
 - [ ] Analytics event tracking
 - [ ] Sponsor analytics endpoints
 - [ ] Revenue summary endpoint
@@ -114,7 +114,7 @@
 - [x] Prize gallery (prize cards on completion screen, grand prize highlight, "Claim Prize" CTA)
 - [x] Prize detail screen (sponsor info, how-to-redeem, QR placeholder)
 - [x] Prize redemption QR screen (tap-to-generate QR, white QR card, redeemed/expired status badges)
-- [ ] Push notification handling
+- [x] Push notification handling (expo-notifications registered on login/restore, foreground handler configured)
 - [ ] Offline mode (cached clue content)
 - [ ] Hunt history + achievements
 - [ ] Tourist mode ("I'm visiting [city]")
