@@ -497,7 +497,8 @@ router.post('/prizes/:prizeId/redeem', async (req: Request, res: Response, next:
         expiresAt: existing.expiresAt.toISOString(),
         createdAt: existing.createdAt.toISOString(),
       };
-      return res.status(200).json({ success: true, data } as ApiSuccess<Redemption>);
+      res.status(200).json({ success: true, data } as ApiSuccess<Redemption>);
+      return;
     }
 
     // Check redemption limit before creating a new record

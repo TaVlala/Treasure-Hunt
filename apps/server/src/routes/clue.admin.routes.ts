@@ -29,6 +29,8 @@ router.use(authenticate, requireRole('admin'));
 // Structural type matching Prisma Clue rows — avoids importing Prisma.Decimal directly
 type PrismaDecimal = { toNumber(): number };
 
+// sponsorId lives in the SponsorClue join table, not as a direct column on Clue.
+// Queries that call toClueResponse must include: { sponsorClue: { select: { sponsorId: true } } }
 type ClueRow = {
   id: string;
   huntId: string;
@@ -45,7 +47,7 @@ type ClueRow = {
   isBonus: boolean;
   points: number;
   unlockMessage: string | null;
-  sponsorId: string | null;
+  sponsorClue: { sponsorId: string } | null;
   createdAt: Date;
 };
 
@@ -67,7 +69,7 @@ function toClueResponse(clue: ClueRow): AdminClue {
     isBonus: clue.isBonus,
     points: clue.points,
     unlockMessage: clue.unlockMessage,
-    sponsorId: clue.sponsorId,
+    sponsorId: clue.sponsorClue?.sponsorId ?? null,
     createdAt: clue.createdAt.toISOString(),
   };
 }
@@ -117,7 +119,6 @@ function toCreateData(body: CreateClueBody, huntId: string, orderIndex: number) 
     isBonus: body.isBonus,
     points: body.points,
     unlockMessage: body.unlockMessage,
-    sponsorId: body.sponsorId ?? null,
   };
 }
 
@@ -144,7 +145,6 @@ function toUpdateData(body: UpdateClueBody) {
     isBonus: body.isBonus,
     points: body.points,
     unlockMessage: body.unlockMessage,
-    sponsorId: body.sponsorId, // undefined = not changed; null = unlink sponsor
   };
 }
 
@@ -170,15 +170,28 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
 
     const clue = await prisma.clue.create({
       data: toCreateData(body, huntId, orderIndex),
+      include: { sponsorClue: { select: { sponsorId: true } } },
     });
 
     // Set the PostGIS geography column — used by GPS proximity checks
     await setClueLocation(clue.id, body.latitude, body.longitude);
 
+    // Link sponsor via SponsorClue join table if sponsorId was provided
+    if (body.sponsorId) {
+      await prisma.sponsorClue.upsert({
+        where: { clueId: clue.id },
+        create: { sponsorId: body.sponsorId, clueId: clue.id },
+        update: { sponsorId: body.sponsorId },
+      });
+    }
+
     const response: ApiSuccess<AdminClue> = {
       success: true,
       message: 'Clue created',
-      data: toClueResponse(clue),
+      data: toClueResponse({
+        ...clue,
+        sponsorClue: body.sponsorId ? { sponsorId: body.sponsorId } : null,
+      }),
     };
     res.status(201).json(response);
   } catch (err) {
@@ -196,6 +209,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     const clues = await prisma.clue.findMany({
       where: { huntId },
       orderBy: { orderIndex: 'asc' },
+      include: { sponsorClue: { select: { sponsorId: true } } },
     });
 
     const response: ApiSuccess<AdminClue[]> = {
@@ -243,6 +257,7 @@ router.put('/reorder', async (req: Request, res: Response, next: NextFunction) =
     const clues = await prisma.clue.findMany({
       where: { huntId },
       orderBy: { orderIndex: 'asc' },
+      include: { sponsorClue: { select: { sponsorId: true } } },
     });
 
     const response: ApiSuccess<AdminClue[]> = {
@@ -271,6 +286,7 @@ router.patch('/:clueId', async (req: Request, res: Response, next: NextFunction)
     const clue = await prisma.clue.update({
       where: { id: clueId },
       data: toUpdateData(body),
+      include: { sponsorClue: { select: { sponsorId: true } } },
     });
 
     // Update the PostGIS column if coordinates changed
@@ -280,9 +296,30 @@ router.patch('/:clueId', async (req: Request, res: Response, next: NextFunction)
       await setClueLocation(clueId, lat, lng);
     }
 
+    // Sync SponsorClue join table if sponsorId was explicitly provided
+    if (body.sponsorId === null) {
+      // Unlink sponsor — delete the SponsorClue row if it exists
+      await prisma.sponsorClue.deleteMany({ where: { clueId } });
+    } else if (body.sponsorId) {
+      // Link or re-link sponsor
+      await prisma.sponsorClue.upsert({
+        where: { clueId },
+        create: { sponsorId: body.sponsorId, clueId },
+        update: { sponsorId: body.sponsorId },
+      });
+    }
+
+    // Re-read sponsorClue after potential update so the response is accurate
+    const sponsorClueAfter =
+      body.sponsorId === null
+        ? null
+        : body.sponsorId
+          ? { sponsorId: body.sponsorId }
+          : clue.sponsorClue;
+
     const response: ApiSuccess<AdminClue> = {
       success: true,
-      data: toClueResponse(clue),
+      data: toClueResponse({ ...clue, sponsorClue: sponsorClueAfter }),
     };
     res.status(200).json(response);
   } catch (err) {
