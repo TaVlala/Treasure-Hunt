@@ -16,6 +16,7 @@ import huntAdminRouter from './routes/hunt.admin.routes';
 import clueAdminRouter from './routes/clue.admin.routes';
 import sponsorAdminRouter from './routes/sponsor.admin.routes';
 import redemptionAdminRouter from './routes/redemption.admin.routes';
+import stripeRouter, { stripeWebhookHandler } from './routes/stripe.routes';
 import gameRouter from './routes/game.routes';
 import playerRouter from './routes/player.routes';
 import uploadRouter from './routes/upload.routes';
@@ -25,7 +26,15 @@ const app = express();
 
 // --- Middleware ---
 
-// Parse JSON request bodies
+// Stripe webhook requires the raw (unparsed) request body for signature verification.
+// Must be registered BEFORE express.json() which would consume and transform the body.
+app.post(
+  '/api/v1/stripe/webhook',
+  express.raw({ type: 'application/json' }),
+  stripeWebhookHandler,
+);
+
+// Parse JSON request bodies for all other routes
 app.use(express.json());
 
 // Parse cookies — required for reading the refresh token on /auth/refresh
@@ -58,6 +67,9 @@ app.use('/api/v1/admin/sponsors', sponsorAdminRouter);
 
 // Redemption validation — staff scan QR to confirm prize handoff
 app.use('/api/v1/admin/redemptions', redemptionAdminRouter);
+
+// Stripe checkout + redirect pages (webhook is mounted above with raw body)
+app.use('/api/v1/stripe', stripeRouter);
 
 // Player game endpoints (proximity check, join hunt, submit answer, leaderboard)
 app.use('/api/v1/game', gameRouter);

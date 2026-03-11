@@ -85,8 +85,8 @@
 - [x] Prize redemption QR generation (POST /player/prizes/:prizeId/redeem — idempotent, UUID qrCode, 90-day expiry)
 - [x] Prize redemption validation endpoint (GET + POST /validate by qrCode — marks REDEEMED, rejects expired/already-redeemed)
 - [ ] Team creation + joining + team sessions
-- [ ] Stripe: ticket purchase flow
-- [ ] Stripe: webhook handling
+- [x] Stripe: ticket purchase flow (POST /stripe/checkout/:huntId → Checkout Session URL)
+- [x] Stripe: webhook handling (POST /stripe/webhook, raw body, creates GameSession + Payment atomically)
 - [ ] Push notifications (Expo Push)
 - [ ] Analytics event tracking
 - [ ] Sponsor analytics endpoints
@@ -107,7 +107,7 @@
 
 ### Mobile Player App
 - [ ] Map view for hunt discovery
-- [ ] Paid ticket purchase (Stripe Checkout)
+- [x] Paid ticket purchase (Stripe Checkout — "Buy Ticket" → browser → poll for session → navigate)
 - [ ] Team creation + join flow
 - [ ] All clue types (image, photo challenge)
 - [ ] Hint system (costs points)

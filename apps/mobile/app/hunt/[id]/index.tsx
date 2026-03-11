@@ -1,5 +1,5 @@
 // Hunt detail screen — shows full info for a single active hunt and lets the player join or resume.
-// Navigated to by pushing /hunt/:id from the discover tab.
+// FREE hunts: "Start Hunt" → direct join. PAID hunts: "Buy Ticket" → Stripe Checkout → poll for session.
 // On join/resume navigates to /hunt/:id/active with the session ID.
 
 import {
@@ -11,7 +11,9 @@ import {
   ScrollView,
   Image,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState, useEffect, useCallback } from 'react';
 import { playerFetch } from '@/lib/api';
@@ -19,6 +21,18 @@ import type { Hunt, HuntDetail, JoinHuntResult } from '@treasure-hunt/shared';
 
 type HuntWithCount = HuntDetail & { clueCount: number };
 type ExistingSession = { id: string; cluesFound: number; totalClues: number; score: number };
+
+// Polls GET /my-session until a session appears or attempts are exhausted (max ~18s)
+async function pollForSession(huntId: string, maxAttempts = 12): Promise<ExistingSession | null> {
+  for (let i = 0; i < maxAttempts; i++) {
+    await new Promise((r) => setTimeout(r, 1500));
+    const session = await playerFetch<ExistingSession>(
+      `/api/v1/player/hunts/${huntId}/my-session`,
+    ).catch(() => null);
+    if (session) return session;
+  }
+  return null;
+}
 
 // ---------------------------------------------------------------------------
 // Design tokens
@@ -101,6 +115,8 @@ export default function HuntDetailScreen() {
   const [existingSession, setExistingSession] = useState<ExistingSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isJoining, setIsJoining] = useState(false);
+  const [isBuying, setIsBuying] = useState(false);
+  const [buyStatus, setBuyStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Fetch hunt detail + check for an existing active session in parallel
@@ -127,7 +143,7 @@ export default function HuntDetailScreen() {
     router.replace(`/hunt/${hunt.id}/active?sessionId=${existingSession.id}&huntId=${hunt.id}`);
   }, [existingSession, hunt, router]);
 
-  // Join the hunt — creates a new game session
+  // Join a FREE hunt — creates a new game session directly
   const onJoin = useCallback(async () => {
     if (!hunt) return;
     setIsJoining(true);
@@ -143,7 +159,49 @@ export default function HuntDetailScreen() {
     } finally {
       setIsJoining(false);
     }
-  }, [hunt]);
+  }, [hunt, router]);
+
+  // Buy a ticket for a PAID hunt — open Stripe Checkout then poll for session creation
+  const onBuyTicket = useCallback(async () => {
+    if (!hunt) return;
+    setIsBuying(true);
+    setBuyStatus('Opening payment...');
+    try {
+      // 1. Create Stripe Checkout Session on the server
+      const { checkoutUrl } = await playerFetch<{ checkoutUrl: string }>(
+        `/api/v1/stripe/checkout/${hunt.id}`,
+        { method: 'POST' },
+      );
+
+      // 2. Open Stripe in the device browser
+      setBuyStatus('Waiting for payment...');
+      await WebBrowser.openBrowserAsync(checkoutUrl, {
+        presentationStyle: WebBrowser.WebBrowserPresentationStyle.FORM_SHEET,
+      });
+
+      // 3. Browser closed — poll for the session the webhook should have created
+      setBuyStatus('Confirming payment...');
+      const session = await pollForSession(hunt.id);
+
+      if (session) {
+        router.replace(`/hunt/${hunt.id}/active?sessionId=${session.id}&huntId=${hunt.id}`);
+      } else {
+        // Webhook may still be in flight — let the player know
+        Alert.alert(
+          'Payment received',
+          'Your payment is being confirmed. Try opening this hunt again in a moment.',
+          [{ text: 'OK' }],
+        );
+        setBuyStatus(null);
+        setIsBuying(false);
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Payment failed';
+      Alert.alert('Payment failed', msg, [{ text: 'OK' }]);
+      setBuyStatus(null);
+      setIsBuying(false);
+    }
+  }, [hunt, router]);
 
   // ---------------------------------------------------------------------------
   // Loading state
@@ -296,9 +354,10 @@ export default function HuntDetailScreen() {
         </View>
       </ScrollView>
 
-      {/* Sticky bottom CTA — Resume or Join */}
+      {/* Sticky bottom CTA */}
       <View style={styles.footer}>
         {existingSession ? (
+          /* Already has a session → Resume */
           <>
             <View style={styles.resumeBanner}>
               <Text style={styles.resumeBannerText}>
@@ -309,7 +368,8 @@ export default function HuntDetailScreen() {
               <Text style={styles.joinText}>Resume Hunt →</Text>
             </TouchableOpacity>
           </>
-        ) : (
+        ) : isFree ? (
+          /* FREE hunt → direct join */
           <TouchableOpacity
             style={[styles.joinBtn, isJoining && styles.joinBtnDisabled]}
             onPress={() => void onJoin()}
@@ -319,11 +379,31 @@ export default function HuntDetailScreen() {
             {isJoining ? (
               <ActivityIndicator color="#000" />
             ) : (
-              <Text style={styles.joinText}>
-                {isFree ? 'Start Hunt — Free' : `Join Hunt · ${priceLabel(hunt)}`}
-              </Text>
+              <Text style={styles.joinText}>Start Hunt — Free</Text>
             )}
           </TouchableOpacity>
+        ) : (
+          /* PAID hunt → Stripe Checkout */
+          <>
+            {isBuying && buyStatus ? (
+              <View style={styles.buyingBanner}>
+                <ActivityIndicator color={ACCENT} size="small" style={{ marginRight: 10 }} />
+                <Text style={styles.buyingBannerText}>{buyStatus}</Text>
+              </View>
+            ) : null}
+            <TouchableOpacity
+              style={[styles.joinBtn, isBuying && styles.joinBtnDisabled]}
+              onPress={() => void onBuyTicket()}
+              disabled={isBuying}
+              activeOpacity={0.8}
+            >
+              {isBuying ? (
+                <ActivityIndicator color="#000" />
+              ) : (
+                <Text style={styles.joinText}>Buy Ticket · {priceLabel(hunt)}</Text>
+              )}
+            </TouchableOpacity>
+          </>
         )}
       </View>
     </SafeAreaView>
@@ -564,6 +644,22 @@ const styles = StyleSheet.create({
   resumeBannerText: {
     color: ACCENT,
     fontSize: 12,
+    fontWeight: '600',
+  },
+  buyingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: SURFACE,
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  buyingBannerText: {
+    color: MUTED,
+    fontSize: 13,
     fontWeight: '600',
   },
 

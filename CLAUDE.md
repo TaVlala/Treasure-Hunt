@@ -16,8 +16,8 @@ hunt tickets, and tourism board contracts.
 
 **Status:** Phase 1 fully complete and merged to main. Starting Phase 2: prizes, Stripe tickets, push notifications, team play, public landing pages.
 
-**Last completed chunk:** Prize redemption validation — `redemption.admin.routes.ts` added with `GET /api/v1/admin/redemptions/:qrCode` (look up by QR, returns prize + player info) and `POST /api/v1/admin/redemptions/:qrCode/validate` (marks REDEEMED, rejects expired/already-redeemed). Full prize flow is now complete end-to-end. Branch `feature/prize-gallery` merged → main.
-**Next chunk:** Stripe ticket purchase flow — `POST /api/v1/player/hunts/:huntId/checkout` creates a Stripe Checkout Session for PAID hunts; mobile paid hunt detail screen shows "Buy Ticket" → Stripe WebView; webhook `POST /api/v1/stripe/webhook` confirms payment and creates GameSession.
+**Last completed chunk:** Stripe ticket purchase — `stripe.routes.ts` added with `POST /stripe/checkout/:huntId` (creates Checkout Session, player auth), `POST /stripe/webhook` (raw body, signature verified, creates Payment + GameSession + PlayerProgress atomically, idempotent), `GET /stripe/success|cancel` (HTML pages). `expo-web-browser` + `stripe` installed. Hunt detail screen: PAID hunts show "Buy Ticket · $X.XX" → opens Stripe in browser → polls `my-session` for up to 18s → navigates to active screen. Branch: `feature/stripe-tickets`.
+**Next chunk:** Push notifications (Expo Push) — register device token on login/app start, send notification when hunt completes or a clue is found nearby.
 
 **Known fix:** Express 5 `ParamsDictionary` types named params as `string | string[]` — always extract with `req.params['key'] as string` in route handlers.
 
