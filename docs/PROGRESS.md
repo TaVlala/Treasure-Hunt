@@ -83,7 +83,7 @@
 - [x] GET /api/v1/player/hunts/:huntId/prizes — returns prizes earned by player in a completed session
 - [ ] Prize creation + management endpoints (admin)
 - [x] Prize redemption QR generation (POST /player/prizes/:prizeId/redeem — idempotent, UUID qrCode, 90-day expiry)
-- [ ] Prize redemption validation endpoint (sponsor scans QR → marks REDEEMED)
+- [x] Prize redemption validation endpoint (GET + POST /validate by qrCode — marks REDEEMED, rejects expired/already-redeemed)
 - [ ] Team creation + joining + team sessions
 - [ ] Stripe: ticket purchase flow
 - [ ] Stripe: webhook handling

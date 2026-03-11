@@ -15,6 +15,7 @@ import authRouter from './routes/auth.routes';
 import huntAdminRouter from './routes/hunt.admin.routes';
 import clueAdminRouter from './routes/clue.admin.routes';
 import sponsorAdminRouter from './routes/sponsor.admin.routes';
+import redemptionAdminRouter from './routes/redemption.admin.routes';
 import gameRouter from './routes/game.routes';
 import playerRouter from './routes/player.routes';
 import uploadRouter from './routes/upload.routes';
@@ -54,6 +55,9 @@ app.use('/api/v1/admin/hunts/:huntId/clues', clueAdminRouter);
 
 // Sponsor admin CRUD
 app.use('/api/v1/admin/sponsors', sponsorAdminRouter);
+
+// Redemption validation — staff scan QR to confirm prize handoff
+app.use('/api/v1/admin/redemptions', redemptionAdminRouter);
 
 // Player game endpoints (proximity check, join hunt, submit answer, leaderboard)
 app.use('/api/v1/game', gameRouter);
