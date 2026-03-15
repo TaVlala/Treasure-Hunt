@@ -55,6 +55,15 @@ const NAV_ITEMS = [
       </svg>
     ),
   },
+  {
+    label: 'Revenue',
+    href: '/revenue',
+    icon: (
+      <svg width="16" height="16" fill="none" viewBox="0 0 16 16">
+        <path d="M8 1v14M4 5h6a2 2 0 010 4H5a2 2 0 000 4h7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    ),
+  },
 ] as const;
 
 export function Sidebar() {

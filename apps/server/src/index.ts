@@ -23,6 +23,7 @@ import stripeRouter, { stripeWebhookHandler } from './routes/stripe.routes';
 import gameRouter from './routes/game.routes';
 import playerRouter from './routes/player.routes';
 import uploadRouter from './routes/upload.routes';
+import publicRouter from './routes/public.routes';
 import { errorHandler } from './middleware/errorHandler';
 
 const app = express();
@@ -91,6 +92,9 @@ app.use('/api/v1/player', playerRouter);
 
 // File upload — generates presigned R2 PUT URLs for direct client uploads
 app.use('/api/v1/upload', uploadRouter);
+
+// Public hunt discovery — no auth required, used by landing pages and SEO
+app.use('/api/v1/public', publicRouter);
 
 // --- Error handling ---
 

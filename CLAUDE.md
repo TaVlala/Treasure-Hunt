@@ -21,9 +21,14 @@ hunt tickets, and tourism board contracts.
 - `team.routes.ts` + `team.schemas.ts`: POST /teams (create + link session), POST /teams/join (by inviteCode + link session), GET /teams/:teamId. Mobile: `app/team/create.tsx`, `app/team/join.tsx`; hunt detail screen shows team options after joining a team-mode hunt.
 - `prize.admin.routes.ts` + `prize.schemas.ts`: full SponsorPrize CRUD at /admin/prizes. Admin: `/hunts/:id/prizes` list, `/prizes/new` create form, `/prizes/:prizeId` edit/delete form. Admin analytics page at `/analytics`.
 
-**Last completed chunk:** Native Stripe PaymentSheet — `POST /stripe/payment-sheet/:huntId` creates PaymentIntent (metadata: huntId+playerId), returns `{ clientSecret, publishableKey }`. Webhook now handles both `checkout.session.completed` (browser) and `payment_intent.succeeded` (native), both calling shared `provisionHuntSession()`. Mobile: `@stripe/stripe-react-native` ^0.40.0 added, `StripeProvider` wraps root layout, hunt detail screen uses `initPaymentSheet` + `presentPaymentSheet` (browser flow removed). Set `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY` + `STRIPE_PUBLISHABLE_KEY` env vars. Requires EAS build to test Apple Pay / Google Pay.
+**Last completed chunk:** Public pages + Sponsor analytics + Revenue dashboard (parallel agents):
+- `public.routes.ts`: GET /public/hunts (paginated, ?city= filter) + GET /public/hunts/:slug (single by slug, no auth)
+- Admin public pages: landing page at `/` (hero + features + CTA), `/discover` (CityFilter client component with hunt cards), `/discover/[slug]` (SEO with generateMetadata + notFound()), `/about` (how-it-works + FAQ)
+- `analytics.admin.routes.ts`: added GET /admin/analytics/sponsors/:sponsorId (clue visits via SponsorClue join, prize/redemption stats) + GET /admin/analytics/revenue (payment aggregates, monthly breakdown via raw SQL date_trunc, last 20 payments)
+- Admin dashboard pages: `/revenue` (3 stat cards + monthly breakdown table with visual bars + recent payments badges), `/sponsors/[id]/analytics` (4 stat cards + clue funnel with percentage bars)
+- `Sidebar.tsx`: Analytics + Revenue nav items added
 
-**Planned next chunk:** Public pages — landing page (city hero), active hunt directory, hunt detail (public/SEO), about/how-it-works. Or: sponsor analytics view (charts) + revenue dashboard in admin.
+**Planned next chunk:** Hunt duplication endpoint, or: live hunt monitor (player map), or: player management admin page.
 
 **Known fix:** Express 5 `ParamsDictionary` types named params as `string | string[]` — always extract with `req.params['key'] as string` in route handlers.
 

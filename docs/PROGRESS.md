@@ -93,8 +93,8 @@
 - [x] Analytics event tracking — CLUE_FOUND + HUNT_COMPLETE recorded to analytics_events table in submit handler; GET /admin/analytics (overall) + GET /admin/analytics/hunts/:huntId (per-hunt funnel)
 - [x] Team creation + joining + team sessions — POST /teams, POST /teams/join, GET /teams/:teamId; session.teamId linked on create/join
 - [x] Prize creation + management endpoints (admin) — full CRUD at /admin/prizes with filters + pagination
-- [ ] Sponsor analytics endpoints
-- [ ] Revenue summary endpoint
+- [x] Sponsor analytics endpoints — GET /admin/analytics/sponsors/:sponsorId (clue visits, prize stats, redemption rate)
+- [x] Revenue summary endpoint — GET /admin/analytics/revenue (totals, monthly breakdown, recent payments)
 - [ ] Hunt duplication endpoint
 - [ ] Offline data caching strategy
 
@@ -102,8 +102,8 @@
 - [ ] Hunt creation wizard (multi-step)
 - [x] Prize manager — create/edit/delete SponsorPrize records; pages at /hunts/:id/prizes, /prizes/new, /prizes/:prizeId
 - [x] Analytics dashboard — /analytics page with event summary cards + recent events table
-- [ ] Sponsor analytics view (charts)
-- [ ] Revenue dashboard
+- [x] Sponsor analytics view — /sponsors/:id/analytics page (4 stat cards + clue funnel with visual bars)
+- [x] Revenue dashboard — /revenue page (total/ticket/sponsor revenue, monthly breakdown table, recent payments)
 - [ ] Live hunt monitor (player map)
 - [ ] Player management page
 - [ ] White-label settings per hunt
@@ -126,11 +126,11 @@
 - [ ] Social sharing
 
 ### Public Pages
-- [ ] Landing page (city hero, bold design)
-- [ ] Active hunts directory
-- [ ] Hunt detail (public, SEO)
+- [x] Landing page (city hero, bold design) — /  with nav, hero, features strip, CTA footer
+- [x] Active hunts directory — /discover with city/title text filter, hunt cards grid, empty state
+- [x] Hunt detail (public, SEO) — /discover/:slug with generateMetadata, full public detail page
 - [ ] Embeddable widget for hotels
-- [ ] About / How it works page
+- [x] About / How it works page — /about with player steps, sponsor section, FAQ
 
 ---
 
