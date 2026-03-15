@@ -359,4 +359,113 @@ router.delete('/:id', async (req: Request, res: Response, next: NextFunction) =>
   }
 });
 
+// Structural type matching what prisma.clue.findMany returns for a clue row
+type ClueRow = {
+  id: string;
+  huntId: string;
+  orderIndex: number;
+  title: string;
+  description: string;
+  hintText: string | null;
+  clueType: string;
+  answer: string | null;
+  imageUrl: string | null;
+  latitude: PrismaDecimal;
+  longitude: PrismaDecimal;
+  proximityRadiusMeters: number;
+  isBonus: boolean;
+  points: number;
+  unlockMessage: string | null;
+};
+
+// POST /:id/duplicate — Clone a hunt as a new DRAFT, copying all fields + clues
+router.post('/:id/duplicate', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = req.params['id'] as string;
+
+    // Fetch the original hunt to clone
+    const original = await prisma.hunt.findUnique({ where: { id } });
+    if (!original) {
+      throw new AppError('Hunt not found', 404, 'NOT_FOUND');
+    }
+
+    // Resolve a unique slug based on the original title with " Copy" suffix
+    const newSlug = await resolveUniqueSlug(original.title + ' Copy');
+
+    // Create the new hunt as a DRAFT owned by the current admin
+    const newHunt = await prisma.hunt.create({
+      data: {
+        title: original.title + ' Copy',
+        slug: newSlug,
+        description: original.description,
+        city: original.city,
+        region: original.region,
+        difficulty: original.difficulty,
+        theme: original.theme,
+        huntType: original.huntType,
+        ticketPriceCents: original.ticketPriceCents,
+        currency: original.currency,
+        timeLimitMinutes: original.timeLimitMinutes,
+        maxPlayers: original.maxPlayers,
+        teamMode: original.teamMode,
+        maxTeamSize: original.maxTeamSize,
+        status: 'DRAFT',
+        startsAt: original.startsAt,
+        endsAt: original.endsAt,
+        thumbnailUrl: original.thumbnailUrl,
+        coverImageUrl: original.coverImageUrl,
+        centerLat: original.centerLat,
+        centerLng: original.centerLng,
+        zoomLevel: original.zoomLevel,
+        whitelabelName: original.whitelabelName,
+        whitelabelLogoUrl: original.whitelabelLogoUrl,
+        whitelabelColor: original.whitelabelColor,
+        metaTitle: original.metaTitle,
+        metaDescription: original.metaDescription,
+        createdBy: req.user!.id,
+      },
+    });
+
+    // Fetch all clues from the original hunt in order
+    const clues = await prisma.clue.findMany({
+      where: { huntId: id },
+      orderBy: { orderIndex: 'asc' },
+    }) as ClueRow[];
+
+    // Clone each clue and update its PostGIS geography column via raw SQL
+    for (const clue of clues) {
+      const newClue = await prisma.clue.create({
+        data: {
+          huntId: newHunt.id,
+          orderIndex: clue.orderIndex,
+          title: clue.title,
+          description: clue.description,
+          hintText: clue.hintText,
+          clueType: clue.clueType,
+          answer: clue.answer,
+          imageUrl: clue.imageUrl,
+          latitude: clue.latitude,
+          longitude: clue.longitude,
+          proximityRadiusMeters: clue.proximityRadiusMeters,
+          isBonus: clue.isBonus,
+          points: clue.points,
+          unlockMessage: clue.unlockMessage,
+        },
+      });
+
+      // Set the PostGIS geography column — cannot be set via Prisma directly
+      await prisma.$executeRaw`UPDATE clues SET location = ST_SetSRID(ST_MakePoint(${clue.longitude}::float, ${clue.latitude}::float), 4326) WHERE id = ${newClue.id}`;
+    }
+
+    const response: ApiSuccess<Hunt> = {
+      success: true,
+      message: 'Hunt duplicated',
+      data: toHuntResponse(newHunt),
+    };
+    res.status(201).json(response);
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

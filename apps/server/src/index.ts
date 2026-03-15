@@ -18,6 +18,7 @@ import sponsorAdminRouter from './routes/sponsor.admin.routes';
 import redemptionAdminRouter from './routes/redemption.admin.routes';
 import analyticsAdminRouter from './routes/analytics.admin.routes';
 import prizeAdminRouter from './routes/prize.admin.routes';
+import playerAdminRouter from './routes/player.admin.routes';
 import teamRouter from './routes/team.routes';
 import stripeRouter, { stripeWebhookHandler } from './routes/stripe.routes';
 import gameRouter from './routes/game.routes';
@@ -77,6 +78,9 @@ app.use('/api/v1/admin/analytics', analyticsAdminRouter);
 
 // Prize (SponsorPrize) admin CRUD
 app.use('/api/v1/admin/prizes', prizeAdminRouter);
+
+// Player admin — list and manage player accounts
+app.use('/api/v1/admin/players', playerAdminRouter);
 
 // Team creation and joining — player-facing
 app.use('/api/v1/teams', teamRouter);

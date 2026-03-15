@@ -64,6 +64,26 @@ const NAV_ITEMS = [
       </svg>
     ),
   },
+  {
+    label: 'Players',
+    href: '/players',
+    icon: (
+      <svg width="16" height="16" fill="none" viewBox="0 0 16 16">
+        <circle cx="8" cy="5" r="3" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+  {
+    label: 'Live Monitor',
+    href: '/live',
+    icon: (
+      <svg width="16" height="16" fill="none" viewBox="0 0 16 16">
+        <circle cx="8" cy="8" r="3" stroke="currentColor" strokeWidth="1.5" />
+        <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1" strokeDasharray="2 2" />
+      </svg>
+    ),
+  },
 ] as const;
 
 export function Sidebar() {

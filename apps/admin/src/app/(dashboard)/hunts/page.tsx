@@ -6,6 +6,7 @@ import { Suspense } from 'react';
 import { serverFetch } from '@/lib/server-api';
 import type { Hunt, PaginatedData } from '@treasure-hunt/shared';
 import { HuntsFilters } from './HuntsFilters';
+import { DuplicateButton } from './DuplicateButton';
 
 const PAGE_SIZE = 20;
 
@@ -101,6 +102,11 @@ function HuntRow({ hunt, index }: { hunt: Hunt; index: number }) {
       <div className="hidden lg:block w-28 shrink-0 text-right">
         <p className="text-xs text-text-muted">{formatDate(hunt.createdAt)}</p>
       </div>
+
+      {/* Actions — duplicate button, hidden on small screens */}
+      <div className="hidden lg:flex w-20 shrink-0 justify-end">
+        <DuplicateButton huntId={hunt.id} />
+      </div>
     </div>
   );
 }
@@ -175,6 +181,7 @@ export default async function HuntsPage({ searchParams }: PageProps) {
             <p className="hidden md:block w-20 text-center text-[10px] uppercase tracking-widest text-text-faint">Difficulty</p>
             <p className="w-24 text-center text-[10px] uppercase tracking-widest text-text-faint">Status</p>
             <p className="hidden lg:block w-28 text-right text-[10px] uppercase tracking-widest text-text-faint">Created</p>
+            <p className="hidden lg:block w-20 text-right text-[10px] uppercase tracking-widest text-text-faint">Actions</p>
           </div>
         )}
 

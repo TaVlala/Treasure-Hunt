@@ -414,5 +414,84 @@ router.get('/revenue', async (req: Request, res: Response, next: NextFunction) =
   }
 });
 
+// ---------------------------------------------------------------------------
+// GET /players/live — live player positions from active game sessions
+// ---------------------------------------------------------------------------
+
+type PrismaDecimal = { toNumber(): number };
+
+interface LivePlayer {
+  sessionId: string;
+  playerId: string;
+  playerName: string;
+  huntId: string;
+  huntTitle: string;
+  cluesFound: number;
+  totalClues: number;
+  score: number;
+  startedAt: string;
+  lastLat: number | null;
+  lastLng: number | null;
+  lastSeenAt: string | null;
+}
+
+interface LivePlayersData {
+  players: LivePlayer[];
+  totalActive: number;
+}
+
+router.get('/players/live', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    // Fetch all active game sessions with player and hunt info
+    const sessions = await prisma.gameSession.findMany({
+      where: { status: 'ACTIVE' },
+      include: {
+        player: { select: { id: true, displayName: true } },
+        hunt: { select: { id: true, title: true } },
+      },
+      orderBy: { startedAt: 'desc' },
+    });
+
+    // For each session, fetch the latest analytics event that has a GPS location — run in parallel
+    const lastEvents = await Promise.all(
+      sessions.map((session) =>
+        prisma.analyticsEvent.findFirst({
+          where: { sessionId: session.id, latitude: { not: null } },
+          orderBy: { createdAt: 'desc' },
+          select: { latitude: true, longitude: true, createdAt: true },
+        }),
+      ),
+    );
+
+    const players: LivePlayer[] = sessions.map((session, i) => {
+      const lastEvent = lastEvents[i];
+      const lat = lastEvent?.latitude as PrismaDecimal | null | undefined;
+      const lng = lastEvent?.longitude as PrismaDecimal | null | undefined;
+
+      return {
+        sessionId: session.id,
+        playerId: session.player.id,
+        playerName: session.player.displayName,
+        huntId: session.hunt.id,
+        huntTitle: session.hunt.title,
+        cluesFound: session.cluesFound,
+        totalClues: session.totalClues,
+        score: session.score,
+        startedAt: session.startedAt.toISOString(),
+        lastLat: lat != null ? lat.toNumber() : null,
+        lastLng: lng != null ? lng.toNumber() : null,
+        lastSeenAt: lastEvent?.createdAt ? lastEvent.createdAt.toISOString() : null,
+      };
+    });
+
+    const data: LivePlayersData = { players, totalActive: players.length };
+    const response: ApiSuccess<LivePlayersData> = { success: true, data };
+    res.status(200).json(response);
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;
+
 
