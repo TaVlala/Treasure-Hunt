@@ -1,5 +1,6 @@
 // Hunt detail screen — shows full info for a single active hunt and lets the player join or resume.
-// FREE hunts: "Start Hunt" → direct join. PAID hunts: "Buy Ticket" → Stripe Checkout → poll for session.
+// FREE hunts: "Start Hunt" → direct join.
+// PAID hunts: "Buy Ticket" → native Stripe PaymentSheet (Apple Pay / Google Pay / card) → poll for session.
 // On join/resume navigates to /hunt/:id/active with the session ID.
 
 import {
@@ -13,7 +14,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import * as WebBrowser from 'expo-web-browser';
+import { useStripe } from '@stripe/stripe-react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState, useEffect, useCallback } from 'react';
 import { playerFetch } from '@/lib/api';
@@ -111,6 +112,7 @@ function InfoRow({ icon, label, value }: { icon: string; label: string; value: s
 export default function HuntDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { initPaymentSheet, presentPaymentSheet } = useStripe();
 
   const [hunt, setHunt] = useState<HuntWithCount | null>(null);
   const [existingSession, setExistingSession] = useState<ExistingSession | null>(null);
@@ -172,25 +174,46 @@ export default function HuntDetailScreen() {
     }
   }, [hunt, router]);
 
-  // Buy a ticket for a PAID hunt — open Stripe Checkout then poll for session creation
+  // Buy a ticket via native Stripe PaymentSheet (Apple Pay / Google Pay / card).
+  // Replaces the browser Checkout flow — no in-app browser needed.
+  // Requires EAS build; will not work in Expo Go.
   const onBuyTicket = useCallback(async () => {
     if (!hunt) return;
     setIsBuying(true);
-    setBuyStatus('Opening payment...');
+    setBuyStatus('Preparing payment...');
     try {
-      // 1. Create Stripe Checkout Session on the server
-      const { checkoutUrl } = await playerFetch<{ checkoutUrl: string }>(
-        `/api/v1/stripe/checkout/${hunt.id}`,
+      // 1. Create a PaymentIntent on the server — returns clientSecret + publishableKey
+      const { clientSecret } = await playerFetch<{ clientSecret: string; publishableKey: string }>(
+        `/api/v1/stripe/payment-sheet/${hunt.id}`,
         { method: 'POST' },
       );
 
-      // 2. Open Stripe in the device browser
-      setBuyStatus('Waiting for payment...');
-      await WebBrowser.openBrowserAsync(checkoutUrl, {
-        presentationStyle: WebBrowser.WebBrowserPresentationStyle.FORM_SHEET,
+      // 2. Initialise the native payment sheet
+      const { error: initError } = await initPaymentSheet({
+        merchantDisplayName: 'Treasure Hunt',
+        paymentIntentClientSecret: clientSecret,
+        defaultBillingDetails: {},
+        // applePay / googlePay blocks can be added here when merchant account is configured
       });
+      if (initError) {
+        throw new Error(initError.message);
+      }
 
-      // 3. Browser closed — poll for the session the webhook should have created
+      // 3. Present the native UI — player selects Apple Pay / Google Pay / card
+      setBuyStatus('Processing payment...');
+      const { error: presentError } = await presentPaymentSheet();
+
+      if (presentError) {
+        // User cancelled — not an error, just reset state
+        if (presentError.code === 'Canceled') {
+          setBuyStatus(null);
+          setIsBuying(false);
+          return;
+        }
+        throw new Error(presentError.message);
+      }
+
+      // 4. Payment succeeded — poll for the session the webhook should have created
       setBuyStatus('Confirming payment...');
       const session = await pollForSession(hunt.id);
 
@@ -212,7 +235,7 @@ export default function HuntDetailScreen() {
       setBuyStatus(null);
       setIsBuying(false);
     }
-  }, [hunt, router]);
+  }, [hunt, router, initPaymentSheet, presentPaymentSheet]);
 
   // ---------------------------------------------------------------------------
   // Loading state

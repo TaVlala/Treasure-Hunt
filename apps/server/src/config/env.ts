@@ -29,6 +29,7 @@ const envSchema = z.object({
 
   // Stripe — optional until payments are built
   STRIPE_SECRET_KEY: z.string().optional(),
+  STRIPE_PUBLISHABLE_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
   // Public base URL of this server — used to build Stripe success/cancel redirect URLs
   APP_URL: z.string().url().optional(),

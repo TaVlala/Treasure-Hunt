@@ -21,7 +21,9 @@ hunt tickets, and tourism board contracts.
 - `team.routes.ts` + `team.schemas.ts`: POST /teams (create + link session), POST /teams/join (by inviteCode + link session), GET /teams/:teamId. Mobile: `app/team/create.tsx`, `app/team/join.tsx`; hunt detail screen shows team options after joining a team-mode hunt.
 - `prize.admin.routes.ts` + `prize.schemas.ts`: full SponsorPrize CRUD at /admin/prizes. Admin: `/hunts/:id/prizes` list, `/prizes/new` create form, `/prizes/:prizeId` edit/delete form. Admin analytics page at `/analytics`.
 
-**Planned next chunk (approved, not started):** Native Stripe PaymentSheet (Apple Pay + Google Pay) — `@stripe/stripe-react-native`, `POST /stripe/payment-sheet/:huntId` (PaymentIntent), `payment_intent.succeeded` webhook, `<StripeProvider>` in `_layout.tsx`, replace browser flow with `initPaymentSheet` + `presentPaymentSheet`. Requires EAS build to test (not Expo Go).
+**Last completed chunk:** Native Stripe PaymentSheet — `POST /stripe/payment-sheet/:huntId` creates PaymentIntent (metadata: huntId+playerId), returns `{ clientSecret, publishableKey }`. Webhook now handles both `checkout.session.completed` (browser) and `payment_intent.succeeded` (native), both calling shared `provisionHuntSession()`. Mobile: `@stripe/stripe-react-native` ^0.40.0 added, `StripeProvider` wraps root layout, hunt detail screen uses `initPaymentSheet` + `presentPaymentSheet` (browser flow removed). Set `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY` + `STRIPE_PUBLISHABLE_KEY` env vars. Requires EAS build to test Apple Pay / Google Pay.
+
+**Planned next chunk:** Public pages — landing page (city hero), active hunt directory, hunt detail (public/SEO), about/how-it-works. Or: sponsor analytics view (charts) + revenue dashboard in admin.
 
 **Known fix:** Express 5 `ParamsDictionary` types named params as `string | string[]` — always extract with `req.params['key'] as string` in route handlers.
 
