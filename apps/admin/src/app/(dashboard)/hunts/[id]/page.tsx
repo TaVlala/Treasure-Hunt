@@ -68,14 +68,25 @@ export default async function HuntDetailPage({ params }: PageProps) {
             </p>
           </div>
 
-          <span
-            className={`
-              shrink-0 text-[10px] uppercase tracking-widest font-medium
-              px-2.5 py-1 rounded-full ${statusStyle}
-            `}
-          >
-            {hunt.status}
-          </span>
+          <div className="flex items-center gap-3 shrink-0">
+            <Link
+              href={`/hunts/${id}/prizes`}
+              className="
+                text-xs text-text-muted hover:text-white border border-border hover:border-border-strong
+                px-3 py-1.5 rounded-lg transition-colors
+              "
+            >
+              Prizes
+            </Link>
+            <span
+              className={`
+                text-[10px] uppercase tracking-widest font-medium
+                px-2.5 py-1 rounded-full ${statusStyle}
+              `}
+            >
+              {hunt.status}
+            </span>
+          </div>
         </div>
       </header>
 

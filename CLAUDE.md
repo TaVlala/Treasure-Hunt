@@ -16,7 +16,10 @@ hunt tickets, and tourism board contracts.
 
 **Status:** Phase 1 fully complete and merged to main. Starting Phase 2: prizes, Stripe tickets, push notifications, team play, public landing pages.
 
-**Last completed chunk:** TypeScript fixes — `clue.admin.routes.ts`: `sponsorId` is not a direct Clue column (lives in `SponsorClue` join table); updated `ClueRow` type, all Prisma queries now include `sponsorClue`, `toCreateData`/`toUpdateData` no longer pass `sponsorId`, POST/PATCH handlers upsert/delete `SponsorClue` correctly. `player.routes.ts`: split `return res.json()` into `res.json(); return` to fix TS7030. `npx tsc --noEmit` → 0 errors.
+**Last completed chunk:** Analytics + Team Play + Admin Prize Manager (parallel agents):
+- `analytics.admin.routes.ts`: GET /admin/analytics (overall event stats), GET /admin/analytics/hunts/:huntId (funnel). `game.routes.ts`: fire-and-forget CLUE_FOUND + HUNT_COMPLETE analytics events recorded in submit handler.
+- `team.routes.ts` + `team.schemas.ts`: POST /teams (create + link session), POST /teams/join (by inviteCode + link session), GET /teams/:teamId. Mobile: `app/team/create.tsx`, `app/team/join.tsx`; hunt detail screen shows team options after joining a team-mode hunt.
+- `prize.admin.routes.ts` + `prize.schemas.ts`: full SponsorPrize CRUD at /admin/prizes. Admin: `/hunts/:id/prizes` list, `/prizes/new` create form, `/prizes/:prizeId` edit/delete form. Admin analytics page at `/analytics`.
 
 **Planned next chunk (approved, not started):** Native Stripe PaymentSheet (Apple Pay + Google Pay) — `@stripe/stripe-react-native`, `POST /stripe/payment-sheet/:huntId` (PaymentIntent), `payment_intent.succeeded` webhook, `<StripeProvider>` in `_layout.tsx`, replace browser flow with `initPaymentSheet` + `presentPaymentSheet`. Requires EAS build to test (not Expo Go).
 

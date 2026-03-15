@@ -16,6 +16,9 @@ import huntAdminRouter from './routes/hunt.admin.routes';
 import clueAdminRouter from './routes/clue.admin.routes';
 import sponsorAdminRouter from './routes/sponsor.admin.routes';
 import redemptionAdminRouter from './routes/redemption.admin.routes';
+import analyticsAdminRouter from './routes/analytics.admin.routes';
+import prizeAdminRouter from './routes/prize.admin.routes';
+import teamRouter from './routes/team.routes';
 import stripeRouter, { stripeWebhookHandler } from './routes/stripe.routes';
 import gameRouter from './routes/game.routes';
 import playerRouter from './routes/player.routes';
@@ -67,6 +70,15 @@ app.use('/api/v1/admin/sponsors', sponsorAdminRouter);
 
 // Redemption validation — staff scan QR to confirm prize handoff
 app.use('/api/v1/admin/redemptions', redemptionAdminRouter);
+
+// Analytics event summaries — admin only
+app.use('/api/v1/admin/analytics', analyticsAdminRouter);
+
+// Prize (SponsorPrize) admin CRUD
+app.use('/api/v1/admin/prizes', prizeAdminRouter);
+
+// Team creation and joining — player-facing
+app.use('/api/v1/teams', teamRouter);
 
 // Stripe checkout + redirect pages (webhook is mounted above with raw body)
 app.use('/api/v1/stripe', stripeRouter);

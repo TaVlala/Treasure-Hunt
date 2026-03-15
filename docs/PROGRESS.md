@@ -90,7 +90,9 @@
 - [ ] Stripe: native PaymentSheet — Apple Pay + Google Pay (@stripe/stripe-react-native, POST /stripe/payment-sheet/:huntId, payment_intent.succeeded webhook) — planned, not started
 - [x] Push notifications (Expo Push) — device token saved on login/restore, notifications sent on clue found + hunt complete
 - [x] TypeScript: 0 errors (fixed SponsorClue join table pattern in clue admin, fixed early return in player routes)
-- [ ] Analytics event tracking
+- [x] Analytics event tracking — CLUE_FOUND + HUNT_COMPLETE recorded to analytics_events table in submit handler; GET /admin/analytics (overall) + GET /admin/analytics/hunts/:huntId (per-hunt funnel)
+- [x] Team creation + joining + team sessions — POST /teams, POST /teams/join, GET /teams/:teamId; session.teamId linked on create/join
+- [x] Prize creation + management endpoints (admin) — full CRUD at /admin/prizes with filters + pagination
 - [ ] Sponsor analytics endpoints
 - [ ] Revenue summary endpoint
 - [ ] Hunt duplication endpoint
@@ -98,7 +100,8 @@
 
 ### Admin Panel
 - [ ] Hunt creation wizard (multi-step)
-- [ ] Prize manager
+- [x] Prize manager — create/edit/delete SponsorPrize records; pages at /hunts/:id/prizes, /prizes/new, /prizes/:prizeId
+- [x] Analytics dashboard — /analytics page with event summary cards + recent events table
 - [ ] Sponsor analytics view (charts)
 - [ ] Revenue dashboard
 - [ ] Live hunt monitor (player map)
@@ -110,7 +113,7 @@
 ### Mobile Player App
 - [ ] Map view for hunt discovery
 - [x] Paid ticket purchase (Stripe Checkout — "Buy Ticket" → browser → poll for session → navigate)
-- [ ] Team creation + join flow
+- [x] Team creation + join flow — /team/create and /team/join screens; team options shown after joining a TEAM/BOTH mode hunt
 - [ ] All clue types (image, photo challenge)
 - [ ] Hint system (costs points)
 - [x] Prize gallery (prize cards on completion screen, grand prize highlight, "Claim Prize" CTA)

@@ -395,6 +395,36 @@ router.post(
         return [prog, sess];
       });
 
+      // Fire-and-forget analytics — records clue_found (always) and hunt_complete (if last clue)
+      void prisma.analyticsEvent
+        .create({
+          data: {
+            eventType: 'CLUE_FOUND',
+            huntId: session.huntId,
+            clueId: body.clueId,
+            playerId: session.playerId,
+            sessionId,
+          },
+        })
+        .catch((err: unknown) => console.error('analytics clue_found:', err));
+
+      if (isLastClue) {
+        void prisma.analyticsEvent
+          .create({
+            data: {
+              eventType: 'HUNT_COMPLETE',
+              huntId: session.huntId,
+              playerId: session.playerId,
+              sessionId,
+              metadata: {
+                score: updatedSession.score,
+                timeTakenSecs: updatedSession.timeTakenSecs,
+              },
+            },
+          })
+          .catch((err: unknown) => console.error('analytics hunt_complete:', err));
+      }
+
       // Fire-and-forget push notification — does not block the response
       const pushToken = session.player.pushToken;
       if (isLastClue) {

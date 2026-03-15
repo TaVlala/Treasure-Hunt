@@ -21,6 +21,7 @@ import type { Hunt, HuntDetail, JoinHuntResult } from '@treasure-hunt/shared';
 
 type HuntWithCount = HuntDetail & { clueCount: number };
 type ExistingSession = { id: string; cluesFound: number; totalClues: number; score: number };
+type JoinedSession = { id: string };
 
 // Polls GET /my-session until a session appears or attempts are exhausted (max ~18s)
 async function pollForSession(huntId: string, maxAttempts = 12): Promise<ExistingSession | null> {
@@ -115,6 +116,8 @@ export default function HuntDetailScreen() {
   const [existingSession, setExistingSession] = useState<ExistingSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isJoining, setIsJoining] = useState(false);
+  const [justJoined, setJustJoined] = useState(false);
+  const [joinedSession, setJoinedSession] = useState<JoinedSession | null>(null);
   const [isBuying, setIsBuying] = useState(false);
   const [buyStatus, setBuyStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -143,7 +146,8 @@ export default function HuntDetailScreen() {
     router.replace(`/hunt/${hunt.id}/active?sessionId=${existingSession.id}&huntId=${hunt.id}`);
   }, [existingSession, hunt, router]);
 
-  // Join a FREE hunt — creates a new game session directly
+  // Join a FREE hunt — creates a new game session directly.
+  // If the hunt supports teams, shows team options instead of navigating immediately.
   const onJoin = useCallback(async () => {
     if (!hunt) return;
     setIsJoining(true);
@@ -152,7 +156,14 @@ export default function HuntDetailScreen() {
         method: 'POST',
         body: JSON.stringify({ huntId: hunt.id }),
       });
-      router.replace(`/hunt/${hunt.id}/active?sessionId=${result.session.id}&huntId=${hunt.id}`);
+      const supportsTeams = hunt.teamMode === 'team' || hunt.teamMode === 'both';
+      if (supportsTeams) {
+        // Stay on screen — offer team options before navigating
+        setJoinedSession({ id: result.session.id });
+        setJustJoined(true);
+      } else {
+        router.replace(`/hunt/${hunt.id}/active?sessionId=${result.session.id}&huntId=${hunt.id}`);
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Could not join hunt';
       Alert.alert('Could not join', msg, [{ text: 'OK' }]);
@@ -366,6 +377,34 @@ export default function HuntDetailScreen() {
             </View>
             <TouchableOpacity style={styles.joinBtn} onPress={onResume} activeOpacity={0.8}>
               <Text style={styles.joinText}>Resume Hunt →</Text>
+            </TouchableOpacity>
+          </>
+        ) : justJoined && joinedSession ? (
+          /* Just joined + hunt supports teams → offer team options */
+          <>
+            <View style={styles.resumeBanner}>
+              <Text style={styles.resumeBannerText}>Joined! Play solo or with a team.</Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.joinBtn, styles.teamBtn]}
+              onPress={() => router.push(`/team/create?sessionId=${joinedSession.id}&huntId=${hunt.id}`)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.joinText}>Create Team</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.joinBtn, styles.teamBtn]}
+              onPress={() => router.push(`/team/join?sessionId=${joinedSession.id}&huntId=${hunt.id}`)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.joinText}>Join Team</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.soloBtn}
+              onPress={() => router.replace(`/hunt/${hunt.id}/active?sessionId=${joinedSession.id}&huntId=${hunt.id}`)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.soloText}>Continue solo →</Text>
             </TouchableOpacity>
           </>
         ) : isFree ? (
@@ -660,6 +699,20 @@ const styles = StyleSheet.create({
   buyingBannerText: {
     color: MUTED,
     fontSize: 13,
+    fontWeight: '600',
+  },
+
+  // Team option buttons — shown after joining a team-enabled hunt
+  teamBtn: {
+    marginBottom: 8,
+  },
+  soloBtn: {
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  soloText: {
+    color: MUTED,
+    fontSize: 14,
     fontWeight: '600',
   },
 

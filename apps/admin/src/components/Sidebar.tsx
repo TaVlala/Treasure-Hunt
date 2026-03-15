@@ -46,6 +46,15 @@ const NAV_ITEMS = [
       </svg>
     ),
   },
+  {
+    label: 'Analytics',
+    href: '/analytics',
+    icon: (
+      <svg width="16" height="16" fill="none" viewBox="0 0 16 16">
+        <path d="M2 12l4-4 3 3 5-6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
 ] as const;
 
 export function Sidebar() {
