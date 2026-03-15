@@ -28,7 +28,14 @@ hunt tickets, and tourism board contracts.
 - Admin dashboard pages: `/revenue` (3 stat cards + monthly breakdown table with visual bars + recent payments badges), `/sponsors/[id]/analytics` (4 stat cards + clue funnel with percentage bars)
 - `Sidebar.tsx`: Analytics + Revenue nav items added
 
-**Planned next chunk:** Hunt duplication endpoint, or: live hunt monitor (player map), or: player management admin page.
+**Last completed chunk:** Hunt duplication + Player management + Live monitor + Creation wizard (parallel agents):
+- `hunt.admin.routes.ts`: POST /admin/hunts/:id/duplicate — clones hunt + all clues as DRAFT, PostGIS via $executeRaw; `DuplicateButton.tsx` added to hunt list rows.
+- `player.admin.routes.ts`: GET /admin/players (search, pagination, session count), GET /admin/players/:id, PATCH /admin/players/:id/status. Admin `/players` page with `PlayersFilters` + `PlayerStatusToggle` client components.
+- `analytics.admin.routes.ts`: GET /admin/analytics/players/live — all active sessions with last GPS from analytics_events. Admin `/live` page polls every 10s, shows player cards.
+- `hunts/new/page.tsx`: rewritten as 5-step wizard (Basics → Settings → Schedule+Map → Images → SEO+Whitelabel) with StepIndicator, per-step validation.
+- `Sidebar.tsx`: Players + Live Monitor nav items added.
+
+**Planned next chunk:** White-label settings per hunt, or: offline clue caching strategy, or: embeddable hotel widget.
 
 **Known fix:** Express 5 `ParamsDictionary` types named params as `string | string[]` — always extract with `req.params['key'] as string` in route handlers.
 

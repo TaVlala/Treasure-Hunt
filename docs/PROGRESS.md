@@ -95,17 +95,17 @@
 - [x] Prize creation + management endpoints (admin) — full CRUD at /admin/prizes with filters + pagination
 - [x] Sponsor analytics endpoints — GET /admin/analytics/sponsors/:sponsorId (clue visits, prize stats, redemption rate)
 - [x] Revenue summary endpoint — GET /admin/analytics/revenue (totals, monthly breakdown, recent payments)
-- [ ] Hunt duplication endpoint
+- [x] Hunt duplication endpoint — POST /admin/hunts/:id/duplicate clones hunt + all clues as new DRAFT
 - [ ] Offline data caching strategy
 
 ### Admin Panel
-- [ ] Hunt creation wizard (multi-step)
+- [x] Hunt creation wizard (multi-step) — 5-step wizard: Basics → Settings → Schedule+Map → Images → SEO+Whitelabel
 - [x] Prize manager — create/edit/delete SponsorPrize records; pages at /hunts/:id/prizes, /prizes/new, /prizes/:prizeId
 - [x] Analytics dashboard — /analytics page with event summary cards + recent events table
 - [x] Sponsor analytics view — /sponsors/:id/analytics page (4 stat cards + clue funnel with visual bars)
 - [x] Revenue dashboard — /revenue page (total/ticket/sponsor revenue, monthly breakdown table, recent payments)
-- [ ] Live hunt monitor (player map)
-- [ ] Player management page
+- [x] Live hunt monitor — /live page with 10s polling, player cards, GPS, progress bars
+- [x] Player management page — /players with search, status toggle, session count
 - [ ] White-label settings per hunt
 - [ ] Sponsor report PDF export
 - [ ] Seasonal hunt templates
