@@ -118,10 +118,49 @@ export default async function PlayersPage({ searchParams }: PageProps) {
             <p className="text-sm text-text-muted">Failed to load players</p>
           </div>
         ) : players.length === 0 ? (
-          <div className="py-12 text-center">
-            <p className="text-sm text-text-muted">
+          <div className="py-16 flex flex-col items-center text-center">
+            {/* Only show the illustration on the no-filters empty state */}
+            {!(search || status) && (
+              <svg
+                width="56"
+                height="56"
+                viewBox="0 0 56 56"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                className="mb-4 text-text-faint"
+                aria-hidden="true"
+              >
+                {/* Person silhouette — head */}
+                <circle cx="28" cy="18" r="9" stroke="currentColor" strokeWidth="2" />
+                {/* Person silhouette — body */}
+                <path
+                  d="M10 46c0-9.941 8.059-18 18-18s18 8.059 18 18"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
+                {/* Question mark */}
+                <text
+                  x="28"
+                  y="22"
+                  textAnchor="middle"
+                  fontSize="12"
+                  fontWeight="600"
+                  fill="currentColor"
+                  fontFamily="system-ui, sans-serif"
+                >
+                  ?
+                </text>
+              </svg>
+            )}
+            <p className="text-sm font-medium text-text-muted">
               {search || status ? 'No players match your filters' : 'No players yet'}
             </p>
+            {!(search || status) && (
+              <p className="text-xs text-text-faint mt-1">
+                Players will appear here once they register
+              </p>
+            )}
           </div>
         ) : (
           players.map((player, i) => (

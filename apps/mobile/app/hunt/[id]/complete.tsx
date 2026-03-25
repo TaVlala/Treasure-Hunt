@@ -13,9 +13,11 @@ import {
   Animated,
   Easing,
   Image,
+  Dimensions,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState, useEffect, useRef } from 'react';
+import * as Haptics from 'expo-haptics';
 import { playerFetch } from '@/lib/api';
 import type { SessionWithProgress, LeaderboardEntry, SponsorPrize, PrizeType } from '@treasure-hunt/shared';
 
@@ -30,6 +32,11 @@ const ACCENT = '#f59e0b';
 const TEXT = '#ffffff';
 const MUTED = '#888888';
 const GREEN = '#22c55e';
+
+// Confetti piece colors
+const CONFETTI_COLORS = ['#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD'];
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // ---------------------------------------------------------------------------
 // Prize type metadata
@@ -65,6 +72,123 @@ function rankSuffix(rank: number): string {
   if (last === 2) return `${rank}nd`;
   if (last === 3) return `${rank}rd`;
   return `${rank}th`;
+}
+
+// ---------------------------------------------------------------------------
+// Confetti piece — a single animated square/circle falling from the top
+// ---------------------------------------------------------------------------
+interface ConfettiPieceConfig {
+  id: number;
+  color: string;
+  startX: number;
+  endX: number;
+  size: number;
+  isCircle: boolean;
+  delay: number;
+}
+
+function ConfettiPiece({ config }: { config: ConfettiPieceConfig }) {
+  const yAnim = useRef(new Animated.Value(-20)).current;
+  const xAnim = useRef(new Animated.Value(config.startX)).current;
+  const rotateAnim = useRef(new Animated.Value(0)).current;
+  const opacityAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    // Start animation after the piece's individual delay
+    const timer = setTimeout(() => {
+      Animated.parallel([
+        // Fall down
+        Animated.timing(yAnim, {
+          toValue: 700,
+          duration: 2200,
+          easing: Easing.in(Easing.quad),
+          useNativeDriver: true,
+        }),
+        // Drift sideways
+        Animated.timing(xAnim, {
+          toValue: config.endX,
+          duration: 2200,
+          easing: Easing.inOut(Easing.sine),
+          useNativeDriver: true,
+        }),
+        // Spin
+        Animated.timing(rotateAnim, {
+          toValue: 1,
+          duration: 2200,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        }),
+        // Fade out in the bottom third of the fall
+        Animated.sequence([
+          Animated.delay(1400),
+          Animated.timing(opacityAnim, {
+            toValue: 0,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+        ]),
+      ]).start();
+    }, config.delay);
+
+    return () => clearTimeout(timer);
+  }, [yAnim, xAnim, rotateAnim, opacityAnim, config.delay, config.endX]);
+
+  const rotate = rotateAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: config.size,
+        height: config.size,
+        borderRadius: config.isCircle ? config.size / 2 : 2,
+        backgroundColor: config.color,
+        transform: [
+          { translateX: xAnim },
+          { translateY: yAnim },
+          { rotate },
+        ],
+        opacity: opacityAnim,
+      }}
+    />
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Confetti — 20 pieces launched from the top of the screen
+// ---------------------------------------------------------------------------
+function Confetti() {
+  const pieces = useRef<ConfettiPieceConfig[]>(
+    Array.from({ length: 20 }, (_, i) => ({
+      id: i,
+      color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+      // Spread pieces across the full screen width
+      startX: (i / 20) * SCREEN_WIDTH,
+      // Each piece drifts a small random amount sideways
+      endX: (i / 20) * SCREEN_WIDTH + (i % 2 === 0 ? 40 : -40),
+      size: i % 3 === 0 ? 8 : 6,
+      isCircle: i % 4 === 0,
+      // Stagger launches over 800ms so they don't all fall at once
+      delay: Math.floor((i / 20) * 800),
+    }))
+  ).current;
+
+  return (
+    <View
+      pointerEvents="none"
+      style={StyleSheet.absoluteFillObject}
+    >
+      {pieces.map((p) => (
+        <ConfettiPiece key={p.id} config={p} />
+      ))}
+    </View>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -197,6 +321,11 @@ export default function CompleteScreen() {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(32)).current;
 
+  // Fire success haptic immediately on mount to celebrate the completion
+  useEffect(() => {
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, []);
+
   useEffect(() => {
     void (async () => {
       try {
@@ -275,6 +404,9 @@ export default function CompleteScreen() {
 
   return (
     <SafeAreaView style={styles.root}>
+      {/* Confetti layer — absolutely positioned, non-interactive, above everything */}
+      <Confetti />
+
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}

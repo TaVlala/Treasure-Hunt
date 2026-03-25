@@ -3,6 +3,7 @@
 // Base path: /api/v1/admin/analytics (registered in index.ts).
 
 import { Router, Request, Response, NextFunction } from 'express';
+import PDFDocument from 'pdfkit';
 import { prisma } from '../config/database';
 import { AppError } from '../middleware/errorHandler';
 import { authenticate, requireRole } from '../middleware/authenticate';
@@ -491,6 +492,297 @@ router.get('/players/live', async (req: Request, res: Response, next: NextFuncti
     next(err);
   }
 });
+
+// ---------------------------------------------------------------------------
+// GET /sponsors/:id/report.pdf — PDF analytics report for a single sponsor
+// ---------------------------------------------------------------------------
+
+router.get(
+  '/sponsors/:id/report.pdf',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const sponsorId = req.params['id'] as string;
+
+      // Verify sponsor exists
+      const sponsor = await prisma.sponsor.findUnique({
+        where: { id: sponsorId },
+        select: {
+          id: true,
+          businessName: true,
+          tier: true,
+          status: true,
+          contactName: true,
+          contactEmail: true,
+          monthlyFeeCents: true,
+        },
+      });
+
+      if (!sponsor) {
+        throw new AppError('Sponsor not found', 404, 'NOT_FOUND');
+      }
+
+      // Fetch all SponsorClue records for this sponsor
+      const sponsorClues = await prisma.sponsorClue.findMany({
+        where: { sponsorId },
+        include: { clue: { select: { id: true, title: true } } },
+      });
+
+      const clueIds = sponsorClues.map((sc) => sc.clueId);
+
+      // Count CLUE_FOUND events per clue
+      const clueFoundGroups =
+        clueIds.length > 0
+          ? await prisma.analyticsEvent.groupBy({
+              by: ['clueId'],
+              where: { eventType: 'CLUE_FOUND', clueId: { in: clueIds } },
+              _count: { id: true },
+            })
+          : [];
+
+      // Count unique visitors per clue (distinct playerId)
+      type UniqueRow = { clue_id: string; unique_visitors: bigint };
+      const uniqueRows: UniqueRow[] =
+        clueIds.length > 0
+          ? await prisma.$queryRaw<UniqueRow[]>`
+              SELECT clue_id, COUNT(DISTINCT player_id)::bigint AS unique_visitors
+              FROM analytics_events
+              WHERE event_type = 'CLUE_FOUND'
+                AND clue_id = ANY(${clueIds}::uuid[])
+              GROUP BY clue_id
+            `
+          : [];
+
+      const countMap = new Map<string, number>();
+      for (const g of clueFoundGroups) {
+        if (g.clueId) countMap.set(g.clueId, g._count.id);
+      }
+      const uniqueMap = new Map<string, number>();
+      for (const r of uniqueRows) {
+        uniqueMap.set(r.clue_id, Number(r.unique_visitors));
+      }
+
+      const totalClueVisits = [...countMap.values()].reduce((s, n) => s + n, 0);
+      const totalUniqueVisitors = [...uniqueMap.values()].reduce((s, n) => s + n, 0);
+
+      // Count active prizes
+      const activePrizes = await prisma.sponsorPrize.count({
+        where: {
+          sponsorId,
+          OR: [{ expiryDate: null }, { expiryDate: { gte: new Date() } }],
+        },
+      });
+
+      // Sum redemptions used
+      const redemptionAgg = await prisma.sponsorPrize.aggregate({
+        where: { sponsorId },
+        _sum: { redemptionsUsed: true },
+      });
+      const totalRedemptions = redemptionAgg._sum.redemptionsUsed ?? 0;
+
+      // Estimated revenue: sum of completed SPONSOR_FEE payments for this sponsor
+      const revenueAgg = await prisma.payment.aggregate({
+        where: {
+          paymentType: 'SPONSOR_FEE',
+          payerType: 'SPONSOR',
+          payerId: sponsorId,
+          status: 'COMPLETED',
+        },
+        _sum: { amountCents: true },
+      });
+      const estimatedRevenueCents = revenueAgg._sum.amountCents ?? 0;
+      const estimatedRevenueDollars = (estimatedRevenueCents / 100).toFixed(2);
+
+      // Build clue funnel rows for the report
+      const clueFunnel = sponsorClues
+        .map((sc) => ({
+          title: sc.clue.title,
+          visits: countMap.get(sc.clueId) ?? 0,
+          unique: uniqueMap.get(sc.clueId) ?? 0,
+        }))
+        .sort((a, b) => b.visits - a.visits);
+
+      // -----------------------------------------------------------------------
+      // Generate PDF with pdfkit
+      // -----------------------------------------------------------------------
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="sponsor-${sponsorId}-report.pdf"`,
+      );
+
+      const doc = new PDFDocument({ margin: 50, size: 'A4' });
+      doc.pipe(res);
+
+      // -- Palette --
+      const COLOR_DARK = '#111827';
+      const COLOR_ACCENT = '#F97316';
+      const COLOR_MUTED = '#6B7280';
+      const COLOR_BORDER = '#E5E7EB';
+
+      // -- Header bar --
+      doc.rect(0, 0, doc.page.width, 80).fill(COLOR_DARK);
+      doc
+        .fillColor('#FFFFFF')
+        .fontSize(22)
+        .font('Helvetica-Bold')
+        .text('Sponsor Analytics Report', 50, 25, { lineBreak: false });
+
+      // -- Logo placeholder --
+      const logoX = doc.page.width - 130;
+      doc.rect(logoX, 14, 80, 50).fillAndStroke('#FFFFFF', COLOR_BORDER);
+      doc.fillColor(COLOR_MUTED).fontSize(10).font('Helvetica').text('LOGO', logoX, 32, {
+        width: 80,
+        align: 'center',
+        lineBreak: false,
+      });
+
+      // -- Sponsor name --
+      doc.moveDown(2);
+      doc
+        .fillColor(COLOR_ACCENT)
+        .fontSize(26)
+        .font('Helvetica-Bold')
+        .text(sponsor.businessName, { align: 'left' });
+
+      // Sub-details row
+      doc
+        .fillColor(COLOR_MUTED)
+        .fontSize(10)
+        .font('Helvetica')
+        .text(
+          `Tier: ${sponsor.tier}  ·  Status: ${sponsor.status}` +
+            (sponsor.contactName ? `  ·  Contact: ${sponsor.contactName}` : '') +
+            (sponsor.contactEmail ? `  <${sponsor.contactEmail}>` : ''),
+        );
+
+      doc
+        .fillColor(COLOR_MUTED)
+        .fontSize(9)
+        .text(`Generated: ${new Date().toISOString()}`);
+
+      // Divider
+      doc.moveDown(0.5);
+      doc
+        .moveTo(50, doc.y)
+        .lineTo(doc.page.width - 50, doc.y)
+        .strokeColor(COLOR_BORDER)
+        .lineWidth(1)
+        .stroke();
+      doc.moveDown(1);
+
+      // -- Section helper --
+      const sectionTitle = (title: string) => {
+        doc
+          .fillColor(COLOR_DARK)
+          .fontSize(13)
+          .font('Helvetica-Bold')
+          .text(title.toUpperCase());
+        doc
+          .moveTo(50, doc.y + 2)
+          .lineTo(doc.page.width - 50, doc.y + 2)
+          .strokeColor(COLOR_ACCENT)
+          .lineWidth(2)
+          .stroke();
+        doc.moveDown(0.8);
+      };
+
+      // Stat row helper
+      const statRow = (label: string, value: string | number) => {
+        const y = doc.y;
+        doc.fillColor(COLOR_MUTED).fontSize(10).font('Helvetica').text(label, 50, y, {
+          continued: false,
+          lineBreak: false,
+          width: 250,
+        });
+        doc
+          .fillColor(COLOR_DARK)
+          .fontSize(10)
+          .font('Helvetica-Bold')
+          .text(String(value), 310, y, { lineBreak: false });
+        doc.moveDown(0.6);
+      };
+
+      // -- Section: Clue Performance --
+      sectionTitle('Clue Performance');
+      statRow('Total Clue Visits', totalClueVisits);
+      statRow('Unique Visitors', totalUniqueVisitors);
+      statRow('Sponsored Clues', clueIds.length);
+      doc.moveDown(0.5);
+
+      // Clue funnel sub-table
+      if (clueFunnel.length > 0) {
+        doc.fillColor(COLOR_MUTED).fontSize(9).font('Helvetica').text('Clue Breakdown:');
+        doc.moveDown(0.3);
+
+        // Column headers
+        const colY = doc.y;
+        doc
+          .fillColor(COLOR_MUTED)
+          .fontSize(8)
+          .font('Helvetica-Bold')
+          .text('CLUE TITLE', 60, colY, { width: 240, lineBreak: false })
+          .text('VISITS', 310, colY, { width: 80, lineBreak: false, align: 'right' })
+          .text('UNIQUE', 400, colY, { width: 80, lineBreak: false, align: 'right' });
+        doc.moveDown(0.4);
+
+        for (const c of clueFunnel) {
+          const rowY = doc.y;
+          doc
+            .fillColor(COLOR_DARK)
+            .fontSize(9)
+            .font('Helvetica')
+            .text(c.title, 60, rowY, { width: 240, lineBreak: false })
+            .fillColor(COLOR_MUTED)
+            .text(String(c.visits), 310, rowY, { width: 80, lineBreak: false, align: 'right' })
+            .text(String(c.unique), 400, rowY, { width: 80, lineBreak: false, align: 'right' });
+          doc.moveDown(0.5);
+        }
+      }
+
+      doc.moveDown(0.8);
+
+      // -- Section: Prize Redemptions --
+      sectionTitle('Prize Redemptions');
+      statRow('Active Prizes', activePrizes);
+      statRow('Total Redemptions', totalRedemptions);
+      const redemptionRate =
+        totalClueVisits > 0
+          ? `${((totalRedemptions / totalClueVisits) * 100).toFixed(1)}%`
+          : '0.0%';
+      statRow('Redemption Rate', redemptionRate);
+      doc.moveDown(0.8);
+
+      // -- Section: Revenue --
+      sectionTitle('Revenue');
+      statRow('Estimated Revenue (completed payments)', `$${estimatedRevenueDollars}`);
+      if (sponsor.monthlyFeeCents != null) {
+        statRow(
+          'Monthly Fee (contracted)',
+          `$${(sponsor.monthlyFeeCents / 100).toFixed(2)}`,
+        );
+      }
+      doc.moveDown(0.8);
+
+      // -- Footer: page number --
+      const footerY = doc.page.height - 40;
+      doc
+        .fillColor(COLOR_MUTED)
+        .fontSize(8)
+        .font('Helvetica')
+        .text(
+          `Page 1  ·  Treasure Hunt Platform  ·  Confidential`,
+          50,
+          footerY,
+          { align: 'center', width: doc.page.width - 100 },
+        );
+
+      doc.end();
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 export default router;
 

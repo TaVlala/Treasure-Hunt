@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { serverFetch } from '@/lib/server-api';
 import type { PaginatedData, PrizeType } from '@treasure-hunt/shared';
+import { Breadcrumb } from '@/components/Breadcrumb';
 
 // Admin prize shape returned by /api/v1/admin/prizes
 interface AdminPrize {
@@ -78,20 +79,14 @@ export default async function HuntPrizesPage({ params }: PageProps) {
 
       {/* Page header with breadcrumb */}
       <div className="mb-6">
-        <div className="flex items-center gap-1.5 text-xs text-text-muted mb-3">
-          <Link href="/hunts" className="hover:text-white transition-colors">
-            Hunts
-          </Link>
-          <svg width="12" height="12" fill="none" viewBox="0 0 12 12" className="text-text-faint">
-            <path d="M4 2l4 4-4 4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          <Link href={`/hunts/${id}`} className="hover:text-white transition-colors">
-            {id.slice(0, 8)}…
-          </Link>
-          <svg width="12" height="12" fill="none" viewBox="0 0 12 12" className="text-text-faint">
-            <path d="M4 2l4 4-4 4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          <span className="text-white">Prizes</span>
+        <div className="mb-3">
+          <Breadcrumb
+            items={[
+              { label: 'Hunts', href: '/hunts' },
+              { label: id.slice(0, 8) + '…', href: `/hunts/${id}` },
+              { label: 'Prizes' },
+            ]}
+          />
         </div>
 
         <div className="flex items-start justify-between">

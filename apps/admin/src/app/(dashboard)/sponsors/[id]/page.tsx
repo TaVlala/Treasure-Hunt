@@ -2,10 +2,10 @@
 // Fetches the sponsor by ID and renders the EditSponsorForm client component.
 
 import { notFound } from 'next/navigation';
-import Link from 'next/link';
 import { serverFetch } from '@/lib/server-api';
 import type { SponsorDetail } from '@treasure-hunt/shared';
 import { EditSponsorForm } from './EditSponsorForm';
+import { Breadcrumb } from '@/components/Breadcrumb';
 
 const STATUS_STYLES: Record<string, string> = {
   active: 'text-green-400 bg-green-400/10',
@@ -39,12 +39,13 @@ export default async function SponsorDetailPage({ params }: PageProps) {
 
       {/* Breadcrumb + header */}
       <div className="mb-8">
-        <div className="flex items-center gap-2 text-xs text-text-muted mb-3">
-          <Link href="/sponsors" className="hover:text-white transition-colors">
-            Sponsors
-          </Link>
-          <span>/</span>
-          <span className="text-white truncate max-w-xs">{sponsor.businessName}</span>
+        <div className="mb-3">
+          <Breadcrumb
+            items={[
+              { label: 'Sponsors', href: '/sponsors' },
+              { label: sponsor.businessName },
+            ]}
+          />
         </div>
 
         <div className="flex items-start justify-between gap-4">

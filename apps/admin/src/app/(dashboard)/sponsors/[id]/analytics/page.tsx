@@ -4,6 +4,7 @@
 
 import Link from 'next/link';
 import { serverFetch } from '@/lib/server-api';
+import ExportPdfButton from './ExportPdfButton';
 
 // ---------------------------------------------------------------------------
 // Types matching the GET /api/v1/admin/analytics/sponsors/:sponsorId response
@@ -83,7 +84,7 @@ export default async function SponsorAnalyticsPage({ params }: PageProps) {
   return (
     <div className="p-8 max-w-5xl">
 
-      {/* Breadcrumb */}
+      {/* Breadcrumb + Export */}
       <div className="mb-8">
         <div className="flex items-center gap-2 text-xs text-text-muted mb-3">
           <Link href="/sponsors" className="hover:text-white transition-colors">
@@ -97,12 +98,18 @@ export default async function SponsorAnalyticsPage({ params }: PageProps) {
           <span className="text-white">Analytics</span>
         </div>
 
-        <h1 className="text-2xl font-semibold text-white tracking-tight">
-          {businessName} — Analytics
-        </h1>
-        <p className="text-sm text-text-muted mt-1">
-          Clue engagement and prize redemption stats
-        </p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-semibold text-white tracking-tight">
+              {businessName} — Analytics
+            </h1>
+            <p className="text-sm text-text-muted mt-1">
+              Clue engagement and prize redemption stats
+            </p>
+          </div>
+
+          <ExportPdfButton sponsorId={id} sponsorName={businessName} />
+        </div>
       </div>
 
       {/* Stat cards */}

@@ -18,10 +18,12 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import * as Location from 'expo-location';
+import * as Haptics from 'expo-haptics';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { playerFetch } from '@/lib/api';
 import type {
   ClueWithSponsor,
+  Hunt,
   SessionWithProgress,
   SubmitClueResult,
 } from '@treasure-hunt/shared';
@@ -61,10 +63,10 @@ function fmtDistance(meters: number): { value: string; unit: string } {
   return { value: Math.round(meters).toString(), unit: 'm' };
 }
 
-// Color-codes distance: green = in range, amber = close, grey = far
-function proximityColor(distMeters: number, radiusMeters: number): string {
+// Color-codes distance: green = in range, accent = close, grey = far
+function proximityColor(distMeters: number, radiusMeters: number, accent: string): string {
   if (distMeters <= radiusMeters) return GREEN;
-  if (distMeters <= radiusMeters * 3) return ACCENT;
+  if (distMeters <= radiusMeters * 3) return accent;
   return MUTED;
 }
 
@@ -74,10 +76,13 @@ function proximityColor(distMeters: number, radiusMeters: number): string {
 function ProximityRing({
   distanceMeters,
   radiusMeters,
+  accent,
 }: {
   distanceMeters: number | null;
   radiusMeters: number;
+  accent: string;
 }) {
+  // Inner breathing pulse (always running)
   const pulse = useRef(new Animated.Value(0.85)).current;
 
   useEffect(() => {
@@ -91,23 +96,65 @@ function ProximityRing({
     return () => anim.stop();
   }, [pulse]);
 
+  // Outer expanding ring — only animates when within 2x radius
+  const outerPulse = useRef(new Animated.Value(1)).current;
+  const isNearby = distanceMeters !== null && distanceMeters < radiusMeters * 2;
+
+  useEffect(() => {
+    if (isNearby) {
+      const expandAnim = Animated.loop(
+        Animated.sequence([
+          Animated.timing(outerPulse, { toValue: 1.4, duration: 800, easing: Easing.inOut(Easing.sine), useNativeDriver: true }),
+          Animated.timing(outerPulse, { toValue: 1, duration: 800, easing: Easing.inOut(Easing.sine), useNativeDriver: true }),
+        ]),
+      );
+      expandAnim.start();
+      return () => expandAnim.stop();
+    } else {
+      outerPulse.setValue(1);
+    }
+  }, [isNearby, outerPulse]);
+
   const within = distanceMeters !== null && distanceMeters <= radiusMeters;
-  const ringColor = distanceMeters !== null ? proximityColor(distanceMeters, radiusMeters) : BORDER;
+  const ringColor = distanceMeters !== null ? proximityColor(distanceMeters, radiusMeters, accent) : BORDER;
   const ringSize = distanceMeters === null
     ? 180
     : Math.max(80, Math.min(200, 80 + (distanceMeters / radiusMeters) * 120));
 
+  // Outer ring size tracks inner ring size so it always sits just outside it
+  const outerSize = ringSize + 24;
+
   return (
-    <Animated.View style={[
-      styles.ring,
-      {
-        width: ringSize, height: ringSize, borderRadius: ringSize / 2,
-        borderColor: ringColor, transform: [{ scale: pulse }],
-        opacity: within ? 1 : 0.7,
-      },
-    ]}>
-      <View style={[styles.ringDot, { backgroundColor: ringColor }]} />
-    </Animated.View>
+    <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+      {/* Outer expanding proximity ring — fades as it expands */}
+      {isNearby && (
+        <Animated.View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            width: outerSize,
+            height: outerSize,
+            borderRadius: outerSize / 2,
+            borderWidth: 2,
+            borderColor: '#FF6B35',
+            transform: [{ scale: outerPulse }],
+            opacity: outerPulse.interpolate({ inputRange: [1, 1.4], outputRange: [0.7, 0] }),
+          }}
+        />
+      )}
+
+      {/* Inner proximity ring with breathing animation */}
+      <Animated.View style={[
+        styles.ring,
+        {
+          width: ringSize, height: ringSize, borderRadius: ringSize / 2,
+          borderColor: ringColor, transform: [{ scale: pulse }],
+          opacity: within ? 1 : 0.7,
+        },
+      ]}>
+        <View style={[styles.ringDot, { backgroundColor: ringColor }]} />
+      </Animated.View>
+    </View>
   );
 }
 
@@ -120,6 +167,7 @@ export default function ActiveHuntScreen() {
   const router = useRouter();
 
   // Session + clue state
+  const [hunt, setHunt] = useState<Hunt | null>(null);
   const [session, setSession] = useState<SessionWithProgress | null>(null);
   const [currentClue, setCurrentClue] = useState<ClueWithSponsor | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -147,8 +195,13 @@ export default function ActiveHuntScreen() {
   useEffect(() => {
     void (async () => {
       try {
-        const data = await playerFetch<SessionWithProgress>(`/api/v1/game/sessions/${sessionId}`);
+        // Fetch session and hunt branding in parallel for fast startup
+        const [data, huntData] = await Promise.all([
+          playerFetch<SessionWithProgress>(`/api/v1/game/sessions/${sessionId}`),
+          playerFetch<Hunt>(`/api/v1/player/hunts/${huntId}`).catch(() => null),
+        ]);
         setSession(data);
+        setHunt(huntData);
 
         const unlockedProgress = data.progress.find((p) => p.status === 'unlocked');
         if (unlockedProgress) {
@@ -219,6 +272,9 @@ export default function ActiveHuntScreen() {
         `/api/v1/game/sessions/${sessionId}/submit`,
         { method: 'POST', body: JSON.stringify({ clueId: currentClue.id, method }) },
       );
+
+      // Haptic success feedback when a clue is found
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
       if (result.huntComplete) {
         router.replace(`/hunt/${huntId}/complete?sessionId=${sessionId}`);
@@ -352,10 +408,13 @@ export default function ActiveHuntScreen() {
   // ---------------------------------------------------------------------------
   // Derived state for main UI
   // ---------------------------------------------------------------------------
+  // Use hunt's whitelabel color when set, otherwise fall back to the default amber accent
+  const accent = hunt?.whitelabelColor ?? ACCENT;
+
   const isQRClue = currentClue.clueType === 'qr_code';
   const withinRange = !isQRClue && distanceMeters !== null && distanceMeters <= currentClue.proximityRadiusMeters;
   const dist = distanceMeters !== null ? fmtDistance(distanceMeters) : null;
-  const distColor = distanceMeters !== null ? proximityColor(distanceMeters, currentClue.proximityRadiusMeters) : MUTED;
+  const distColor = distanceMeters !== null ? proximityColor(distanceMeters, currentClue.proximityRadiusMeters, accent) : MUTED;
   const clueIndex = session.progress.filter((p) => p.status === 'found').length;
   const currentProgress = session.progress.find((p) => p.clueId === currentClue.id);
   const hintAlreadyUsed = currentProgress?.hintUsed ?? false;
@@ -372,17 +431,17 @@ export default function ActiveHuntScreen() {
           <Text style={styles.progressText}>Clue {clueIndex + 1} of {session.totalClues}</Text>
         </View>
         <TouchableOpacity
-          style={styles.scorePill}
+          style={[styles.scorePill, { backgroundColor: accent + '22', borderColor: accent + '55' }]}
           onPress={() => router.push(`/hunt/${huntId}/leaderboard?sessionId=${sessionId}&playerId=${session.playerId}`)}
           activeOpacity={0.7}
         >
-          <Text style={styles.scoreText}>🏆 {session.score} pts</Text>
+          <Text style={[styles.scoreText, { color: accent }]}>🏆 {session.score} pts</Text>
         </TouchableOpacity>
       </View>
 
       {/* Progress bar */}
       <View style={styles.progressBarTrack}>
-        <View style={[styles.progressBarFill, { width: `${(clueIndex / session.totalClues) * 100}%` }]} />
+        <View style={[styles.progressBarFill, { width: `${(clueIndex / session.totalClues) * 100}%`, backgroundColor: accent }]} />
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -391,7 +450,7 @@ export default function ActiveHuntScreen() {
         {!isQRClue && (
           <>
             <View style={styles.ringContainer}>
-              <ProximityRing distanceMeters={distanceMeters} radiusMeters={currentClue.proximityRadiusMeters} />
+              <ProximityRing distanceMeters={distanceMeters} radiusMeters={currentClue.proximityRadiusMeters} accent={accent} />
               {dist ? (
                 <View style={styles.distanceBlock}>
                   <Text style={[styles.distanceValue, { color: distColor }]}>{dist.value}</Text>
@@ -429,16 +488,16 @@ export default function ActiveHuntScreen() {
               <Text style={styles.clueTypeText}>{currentClue.clueType.replace(/_/g, ' ')}</Text>
             </View>
             {currentClue.isBonus && (
-              <View style={styles.bonusTag}>
-                <Text style={styles.bonusText}>BONUS +{currentClue.points}</Text>
+              <View style={[styles.bonusTag, { backgroundColor: accent + '22', borderColor: accent + '55' }]}>
+                <Text style={[styles.bonusText, { color: accent }]}>BONUS +{currentClue.points}</Text>
               </View>
             )}
           </View>
           <Text style={styles.clueTitle}>{currentClue.title}</Text>
           <Text style={styles.clueDesc}>{currentClue.description}</Text>
           {currentClue.unlockMessage && (withinRange || isQRClue) && (
-            <View style={styles.unlockMsg}>
-              <Text style={styles.unlockMsgText}>💡 {currentClue.unlockMessage}</Text>
+            <View style={[styles.unlockMsg, { backgroundColor: accent + '18', borderColor: accent + '44' }]}>
+              <Text style={[styles.unlockMsgText, { color: accent }]}>💡 {currentClue.unlockMessage}</Text>
             </View>
           )}
         </View>
@@ -449,18 +508,18 @@ export default function ActiveHuntScreen() {
             styles.sponsorStrip,
             currentClue.sponsor.brandingColor
               ? { borderColor: currentClue.sponsor.brandingColor + '66' }
-              : undefined,
+              : { borderColor: accent + '44' },
           ]}>
             <View style={styles.sponsorRow}>
-              <Text style={styles.sponsorBadge}>SPONSOR</Text>
+              <Text style={[styles.sponsorBadge, { backgroundColor: accent + '22', color: accent }]}>SPONSOR</Text>
               <Text style={styles.sponsorName}>{currentClue.sponsor.businessName}</Text>
             </View>
             {currentClue.sponsor.brandedMessage ? (
               <Text style={styles.sponsorMessage}>{currentClue.sponsor.brandedMessage}</Text>
             ) : null}
             {currentClue.sponsor.offerText ? (
-              <View style={styles.sponsorOfferRow}>
-                <Text style={styles.sponsorOfferText}>{currentClue.sponsor.offerText}</Text>
+              <View style={[styles.sponsorOfferRow, { backgroundColor: accent + '18' }]}>
+                <Text style={[styles.sponsorOfferText, { color: accent }]}>{currentClue.sponsor.offerText}</Text>
               </View>
             ) : null}
             {currentClue.sponsor.callToAction ? (
@@ -472,8 +531,8 @@ export default function ActiveHuntScreen() {
         {/* Hint card */}
         {currentClue.hintText && (
           hintRevealed ? (
-            <View style={styles.hintRevealed}>
-              <Text style={styles.hintRevealedLabel}>Hint</Text>
+            <View style={[styles.hintRevealed, { borderColor: accent + '44' }]}>
+              <Text style={[styles.hintRevealedLabel, { color: accent }]}>Hint</Text>
               <Text style={styles.hintRevealedText}>{hintText}</Text>
               {hintAlreadyUsed && <Text style={styles.hintUsedNote}>−{HINT_COST} pts deducted</Text>}
             </View>
@@ -498,8 +557,11 @@ export default function ActiveHuntScreen() {
       <View style={styles.footer}>
         {isQRClue ? (
           <TouchableOpacity
-            style={[styles.submitBtn, isSubmitting && styles.submitBtnDisabled]}
-            onPress={() => void onOpenQR()}
+            style={[styles.submitBtn, isSubmitting && styles.submitBtnDisabled, !isSubmitting && { backgroundColor: accent }]}
+            onPress={() => {
+              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              void onOpenQR();
+            }}
             disabled={isSubmitting}
             activeOpacity={0.8}
           >
@@ -510,8 +572,11 @@ export default function ActiveHuntScreen() {
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
-            style={[styles.submitBtn, !canSubmitGPS && styles.submitBtnDisabled]}
-            onPress={() => void onSubmit('gps')}
+            style={[styles.submitBtn, !canSubmitGPS && styles.submitBtnDisabled, canSubmitGPS && { backgroundColor: accent }]}
+            onPress={() => {
+              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              void onSubmit('gps');
+            }}
             disabled={!canSubmitGPS}
             activeOpacity={0.8}
           >

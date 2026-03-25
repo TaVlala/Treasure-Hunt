@@ -611,7 +611,7 @@ export default function NewHuntPage() {
 
   // Validates required fields for the current step only
   function validateStep(stepIndex: number): string | null {
-    const requiredFields = STEPS[stepIndex].fields as readonly (keyof FormValues)[];
+    const requiredFields = STEPS[stepIndex]!.fields as readonly (keyof FormValues)[];
     for (const key of requiredFields) {
       if (!form[key].trim()) {
         const label = FIELD_LABELS[key] ?? key;
@@ -748,7 +748,7 @@ export default function NewHuntPage() {
 
       {/* Current step title */}
       <h2 className="text-base font-semibold text-white mb-6">
-        {STEPS[step].label}
+        {STEPS[step]!.label}
       </h2>
 
       {/* Error banner */}

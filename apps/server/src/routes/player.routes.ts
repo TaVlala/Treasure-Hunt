@@ -539,6 +539,44 @@ router.post('/prizes/:prizeId/redeem', async (req: Request, res: Response, next:
   }
 });
 
+// GET /sessions — returns all game sessions for the authenticated player, newest first.
+// Includes the hunt title and per-session stats. Rank is not stored on the session row,
+// so it is always null in this response.
+router.get('/sessions', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const playerId = req.user!.id;
+
+    const sessions = await prisma.gameSession.findMany({
+      where: { playerId },
+      orderBy: { startedAt: 'desc' },
+      include: {
+        hunt: {
+          select: { id: true, title: true },
+        },
+      },
+    });
+
+    const data = sessions.map((s) => ({
+      id: s.id,
+      huntId: s.huntId,
+      huntTitle: s.hunt.title,
+      status: s.status.toLowerCase(),
+      score: s.score,
+      startedAt: s.startedAt.toISOString(),
+      completedAt: s.completedAt ? s.completedAt.toISOString() : null,
+      cluesFound: s.cluesFound,
+      totalClues: s.totalClues,
+      timeTakenSecs: s.timeTakenSecs,
+      rank: null as number | null,
+    }));
+
+    const response: ApiSuccess<typeof data> = { success: true, data };
+    res.status(200).json(response);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Request body schema for device token registration
 const deviceTokenBody = z.object({
   token: z.string().min(1).max(500),

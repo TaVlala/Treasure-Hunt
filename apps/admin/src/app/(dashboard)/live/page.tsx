@@ -215,11 +215,34 @@ export default function LiveMonitorPage() {
 
       {/* Empty state */}
       {!loading && !error && players.length === 0 && (
-        <div className="bg-surface border border-border rounded-xl py-20 text-center">
-          <p className="text-2xl mb-3">🗺️</p>
-          <p className="text-sm font-medium text-text-muted">No active players right now</p>
+        <div className="bg-surface border border-border rounded-xl py-20 flex flex-col items-center text-center">
+          {/* Radar / map-pin SVG icon */}
+          <svg
+            width="56"
+            height="56"
+            viewBox="0 0 56 56"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            className="mb-4 text-text-faint"
+            aria-hidden="true"
+          >
+            {/* Outer radar ring */}
+            <circle cx="28" cy="28" r="22" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 3" />
+            {/* Mid radar ring */}
+            <circle cx="28" cy="28" r="13" stroke="currentColor" strokeWidth="1.5" strokeDasharray="3 2.5" />
+            {/* Map pin body */}
+            <path
+              d="M28 14c-5.523 0-10 4.477-10 10 0 7 10 18 10 18s10-11 10-18c0-5.523-4.477-10-10-10z"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinejoin="round"
+            />
+            {/* Map pin inner dot */}
+            <circle cx="28" cy="24" r="3" stroke="currentColor" strokeWidth="1.6" />
+          </svg>
+          <p className="text-sm font-medium text-text-muted">No active hunts right now</p>
           <p className="text-xs text-text-faint mt-1">
-            Players will appear here once they start a hunt
+            Live sessions will appear here
           </p>
         </div>
       )}

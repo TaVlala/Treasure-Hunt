@@ -1,5 +1,6 @@
-// Hunt discovery screen — shows all ACTIVE hunts as a scrollable card list.
+// Hunt discovery screen — shows all ACTIVE hunts as a scrollable card list or map view.
 // Fetches from GET /api/v1/player/hunts; supports pull-to-refresh and city filter.
+// Toggle between list and map modes via pill buttons at the top.
 
 import {
   View,
@@ -18,9 +19,16 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { playerFetch } from '@/lib/api';
 import type { Hunt, PaginatedData } from '@treasure-hunt/shared';
+import MapboxGL from '@rnmapbox/maps';
+
+// Initialise Mapbox token from env variable (set EXPO_PUBLIC_MAPBOX_TOKEN in .env)
+MapboxGL.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? '');
 
 // Hunt as returned by /api/v1/player/hunts — includes server-side clue count
 type HuntWithCount = Hunt & { clueCount: number };
+
+// View mode for the toggle
+type ViewMode = 'list' | 'map';
 
 // ---------------------------------------------------------------------------
 // Design tokens
@@ -143,6 +151,130 @@ function SkeletonCard() {
 }
 
 // ---------------------------------------------------------------------------
+// Real Mapbox map view
+// ---------------------------------------------------------------------------
+
+function MapView({
+  hunts,
+  selectedHunt,
+  onSelectHunt,
+  onViewHunt,
+}: {
+  hunts: HuntWithCount[];
+  selectedHunt: HuntWithCount | null;
+  onSelectHunt: (hunt: HuntWithCount | null) => void;
+  onViewHunt: (hunt: HuntWithCount) => void;
+}) {
+  const huntsWithCoords = hunts.filter(
+    (h) => h.centerLat != null && h.centerLng != null,
+  );
+
+  // Default center: first hunt with coords, or world center
+  const defaultCenter: [number, number] =
+    huntsWithCoords.length > 0
+      ? [huntsWithCoords[0].centerLng, huntsWithCoords[0].centerLat]
+      : [0, 20];
+
+  return (
+    <View style={styles.mapContainer}>
+      <MapboxGL.MapView style={styles.map} styleURL={MapboxGL.StyleURL.Dark}>
+        <MapboxGL.Camera
+          defaultSettings={{ centerCoordinate: defaultCenter, zoomLevel: 10 }}
+        />
+        <MapboxGL.UserLocation visible={true} />
+
+        {huntsWithCoords.map((hunt) => {
+          const diff = difficultyMeta(hunt.difficulty);
+          const isSelected = selectedHunt?.id === hunt.id;
+          return (
+            <MapboxGL.PointAnnotation
+              key={hunt.id}
+              id={hunt.id}
+              coordinate={[hunt.centerLng, hunt.centerLat]}
+              onSelected={() => onSelectHunt(hunt)}
+              onDeselected={() => onSelectHunt(null)}
+            >
+              <View
+                style={[
+                  styles.mapPin,
+                  { backgroundColor: diff.color },
+                  isSelected && styles.mapPinSelected,
+                ]}
+              />
+            </MapboxGL.PointAnnotation>
+          );
+        })}
+      </MapboxGL.MapView>
+
+      {/* Bottom callout for selected hunt */}
+      {selectedHunt && (
+        <View style={styles.mapCallout}>
+          <View style={styles.mapCalloutInner}>
+            <Text style={styles.mapCalloutTitle} numberOfLines={1}>{selectedHunt.title}</Text>
+            <View style={styles.mapCalloutRow}>
+              {(() => {
+                const diff = difficultyMeta(selectedHunt.difficulty);
+                return (
+                  <View style={[styles.mapCalloutBadge, { borderColor: diff.color + '55', backgroundColor: diff.color + '18' }]}>
+                    <View style={[styles.mapCalloutDot, { backgroundColor: diff.color }]} />
+                    <Text style={[styles.mapCalloutBadgeText, { color: diff.color }]}>{diff.label}</Text>
+                  </View>
+                );
+              })()}
+              <Text style={styles.mapCalloutCity}>{selectedHunt.city}</Text>
+            </View>
+          </View>
+          <TouchableOpacity
+            style={styles.mapCalloutBtn}
+            onPress={() => onViewHunt(selectedHunt)}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.mapCalloutBtnText}>View Hunt →</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Toggle component — "≡ List" | "🗺 Map" pill buttons
+// ---------------------------------------------------------------------------
+
+function ViewToggle({
+  mode,
+  onChange,
+}: {
+  mode: ViewMode;
+  onChange: (m: ViewMode) => void;
+}) {
+  return (
+    <View style={styles.toggleRow}>
+      <View style={styles.togglePill}>
+        <TouchableOpacity
+          style={[styles.toggleBtn, mode === 'list' && styles.toggleBtnActive]}
+          onPress={() => onChange('list')}
+          activeOpacity={0.8}
+        >
+          <Text style={[styles.toggleBtnText, mode === 'list' && styles.toggleBtnTextActive]}>
+            ≡ List
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.toggleBtn, mode === 'map' && styles.toggleBtnActive]}
+          onPress={() => onChange('map')}
+          activeOpacity={0.8}
+        >
+          <Text style={[styles.toggleBtnText, mode === 'map' && styles.toggleBtnTextActive]}>
+            🗺 Map
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Screen
 // ---------------------------------------------------------------------------
 
@@ -156,6 +288,11 @@ export default function DiscoverScreen() {
   const [error, setError] = useState<string | null>(null);
   const [cityFilter, setCityFilter] = useState('');
   const [searchText, setSearchText] = useState('');
+
+  // View mode toggle state
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
+  // Selected hunt on the map (for bottom callout)
+  const [selectedHunt, setSelectedHunt] = useState<HuntWithCount | null>(null);
 
   // Fetches the hunt list; used on mount and pull-to-refresh
   const fetchHunts = useCallback(async (city?: string) => {
@@ -209,6 +346,12 @@ export default function DiscoverScreen() {
     router.push(`/hunt/${hunt.id}`);
   }, [router]);
 
+  // Clear selected hunt when switching to list view
+  const onViewModeChange = useCallback((m: ViewMode) => {
+    setViewMode(m);
+    if (m === 'list') setSelectedHunt(null);
+  }, []);
+
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
@@ -259,9 +402,12 @@ export default function DiscoverScreen() {
         </View>
       ) : null}
 
+      {/* List / Map toggle */}
+      <ViewToggle mode={viewMode} onChange={onViewModeChange} />
+
       {/* Content */}
       {isLoading ? (
-        // Loading skeletons
+        // Loading skeletons — shown regardless of view mode
         <View style={styles.listContent}>
           <SkeletonCard />
           <SkeletonCard />
@@ -277,8 +423,16 @@ export default function DiscoverScreen() {
             <Text style={styles.retryText}>Try Again</Text>
           </TouchableOpacity>
         </View>
+      ) : viewMode === 'map' ? (
+        // Map view
+        <MapView
+          hunts={hunts}
+          selectedHunt={selectedHunt}
+          onSelectHunt={setSelectedHunt}
+          onViewHunt={onHuntPress}
+        />
       ) : hunts.length === 0 ? (
-        // Empty state
+        // Empty state (list mode only — map handles its own empty rendering)
         <View style={styles.center}>
           <Text style={styles.emptyIcon}>🗺️</Text>
           <Text style={styles.emptyTitle}>
@@ -437,6 +591,37 @@ const styles = StyleSheet.create({
     color: ACCENT,
     fontSize: 12,
     fontWeight: '600',
+  },
+
+  // List / Map toggle
+  toggleRow: {
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+  },
+  togglePill: {
+    flexDirection: 'row',
+    backgroundColor: SURFACE,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: BORDER,
+    padding: 3,
+    alignSelf: 'flex-start',
+  },
+  toggleBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  toggleBtnActive: {
+    backgroundColor: ACCENT,
+  },
+  toggleBtnText: {
+    color: MUTED,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  toggleBtnTextActive: {
+    color: '#000',
   },
 
   // List
@@ -618,5 +803,97 @@ const styles = StyleSheet.create({
     color: '#000',
     fontWeight: '700',
     fontSize: 14,
+  },
+
+  // ---------------------------------------------------------------------------
+  // Map styles
+  // ---------------------------------------------------------------------------
+
+  mapContainer: {
+    flex: 1,
+  },
+  map: {
+    flex: 1,
+  },
+  mapPin: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  mapPinSelected: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 3,
+    borderColor: '#fff',
+  },
+
+  // Bottom callout card for selected hunt
+  mapCallout: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: BG,
+    borderTopWidth: 1,
+    borderTopColor: BORDER,
+    padding: 16,
+    paddingBottom: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  mapCalloutInner: {
+    flex: 1,
+  },
+  mapCalloutTitle: {
+    color: TEXT,
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 6,
+    letterSpacing: -0.2,
+  },
+  mapCalloutRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  mapCalloutBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderWidth: 1,
+  },
+  mapCalloutDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+  },
+  mapCalloutBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  mapCalloutCity: {
+    color: MUTED,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  mapCalloutBtn: {
+    backgroundColor: ACCENT,
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    flexShrink: 0,
+  },
+  mapCalloutBtnText: {
+    color: '#000',
+    fontSize: 13,
+    fontWeight: '800',
   },
 });

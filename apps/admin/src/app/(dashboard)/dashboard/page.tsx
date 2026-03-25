@@ -36,7 +36,7 @@ function StatCard({
 
   if (href) {
     return (
-      <Link href={href} className="block hover:opacity-90 transition-opacity">
+      <Link href={href} className="block cursor-pointer hover:shadow-lg transition-shadow">
         {content}
       </Link>
     );
@@ -110,7 +110,7 @@ export default async function DashboardPage() {
         <StatCard label="Active Hunts" value={activeHunts} href="/hunts" accent={activeHunts > 0} />
         <StatCard label="Total Hunts" value={totalHunts} href="/hunts" />
         <StatCard label="Sponsors" value={totalSponsors} href="/sponsors" />
-        <StatCard label="Players" value="—" />
+        <StatCard label="Players" value="—" href="/players" />
       </div>
 
       {/* Quick actions */}

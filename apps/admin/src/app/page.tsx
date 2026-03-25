@@ -23,7 +23,7 @@ export default function RootPage() {
       </nav>
 
       {/* ── Hero ── */}
-      <section className="min-h-screen flex flex-col items-center justify-center text-center px-6 relative overflow-hidden">
+      <section className="min-h-[calc(100vh-3.5rem)] flex flex-col items-center justify-start text-center px-6 pt-28 pb-24 relative">
         {/* Background glow */}
         <div
           className="absolute inset-0 pointer-events-none"

@@ -3,6 +3,7 @@
 // Base path: /api/v1/admin/hunts (registered in index.ts).
 
 import { Router, Request, Response, NextFunction } from 'express';
+import { ClueType } from '@prisma/client';
 import { prisma } from '../config/database';
 import { AppError } from '../middleware/errorHandler';
 import { authenticate, requireRole } from '../middleware/authenticate';
@@ -367,7 +368,7 @@ type ClueRow = {
   title: string;
   description: string;
   hintText: string | null;
-  clueType: string;
+  clueType: ClueType;
   answer: string | null;
   imageUrl: string | null;
   latitude: PrismaDecimal;
@@ -444,8 +445,8 @@ router.post('/:id/duplicate', async (req: Request, res: Response, next: NextFunc
           clueType: clue.clueType,
           answer: clue.answer,
           imageUrl: clue.imageUrl,
-          latitude: clue.latitude,
-          longitude: clue.longitude,
+          latitude: clue.latitude.toNumber(),
+          longitude: clue.longitude.toNumber(),
           proximityRadiusMeters: clue.proximityRadiusMeters,
           isBonus: clue.isBonus,
           points: clue.points,
