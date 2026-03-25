@@ -147,7 +147,7 @@
 
 ### Admin Panel
 - [ ] Multi-city management
-- [ ] Sponsor self-serve portal (separate auth)
+- [x] Sponsor self-serve portal — SPONSOR role + User→Sponsor link, register/login endpoints, GET /sponsor/me+clues+analytics, /sponsor/login+register+dashboard pages
 - [ ] Advanced analytics dashboards
 - [ ] A/B test hunt variations
 - [ ] Bulk hunt management

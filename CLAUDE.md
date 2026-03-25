@@ -43,7 +43,14 @@ hunt tickets, and tourism board contracts.
 - Admin: loading skeleton pages for hunts/players/revenue/sponsors routes; Breadcrumb component extracted.
 - TypeScript: 0 errors (ClueType import + Decimal.toNumber() in duplication; STEPS non-null assertions in wizard).
 
-**Last completed chunk (Phase 3 Track B — chunk 3 / TRACK COMPLETE):** Streak achievement + Player tier:
+**Last completed chunk (Phase 3 Track A — chunk 1):** Sponsor self-serve portal:
+- `schema.prisma`: `SPONSOR` in `UserRole`; `Sponsor.userId` FK (⚠️ needs `prisma migrate dev --name add_sponsor_user_link`)
+- `auth.routes.ts`: `POST /auth/sponsor/register` + `POST /auth/sponsor/login`
+- `sponsor.portal.routes.ts`: `GET /sponsor/me`, `/clues`, `/analytics` (SPONSOR role gated)
+- Admin: `/sponsor/login`, `/sponsor/register`, `/sponsor/dashboard` (standalone, no sidebar)
+- Branch: `feature/phase3-sponsor-portal`
+
+**Previous completed chunk (Phase 3 Track B — chunk 3 / TRACK B COMPLETE):** Streak achievement + Player tier:
 - `achievements.ts`: `streak_3` (🔥 On a Roll) — 3 consecutive play days, derived from session dates
 - `playerTier.ts`: `getTier(pts)` → Bronze(0) / Silver(250) / Gold(1000) / Platinum(3000)
 - `player.routes.ts`: tier included in `GET /profile` stats
