@@ -143,7 +143,7 @@
 - [ ] Advanced analytics (cohorts, retention)
 - [x] Rate limiting and abuse protection — helmet security headers, express-rate-limit (auth 10/15min, game 60/min, general 200/min), XSS sanitisation middleware
 - [ ] API versioning
-- [ ] Background job queue (bull/bullmq)
+- [x] Background job queue (BullMQ) — analyticsQueue + emailQueue + cleanupQueue; analytics.worker (off request thread), email.worker (Resend, retry x3), cleanup.worker (nightly 02:00 UTC purge); Bull Board at /bull-board
 
 ### Admin Panel
 - [ ] Multi-city management

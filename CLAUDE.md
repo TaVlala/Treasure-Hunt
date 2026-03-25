@@ -43,7 +43,18 @@ hunt tickets, and tourism board contracts.
 - Admin: loading skeleton pages for hunts/players/revenue/sponsors routes; Breadcrumb component extracted.
 - TypeScript: 0 errors (ClueType import + Decimal.toNumber() in duplication; STEPS non-null assertions in wizard).
 
-**Last completed chunk (Phase 3 Track C — chunk 1):** Security & rate limiting:
+**Last completed chunk (Phase 3 Track C — chunk 2):** Background jobs (BullMQ):
+- `config/redis.ts`: lazy ioredis connection; graceful close; no-op when `REDIS_URL` absent
+- `queues/index.ts`: `analyticsQueue` / `emailQueue` / `cleanupQueue`; typed payloads; `enqueueAnalytics()` + `enqueueEmail()` helpers with DB/silent fallback
+- `workers/analytics.worker.ts`: CLUE_FOUND + HUNT_COMPLETE off request thread (concurrency 5)
+- `workers/email.worker.ts`: Resend email — payment receipt, achievement unlock, welcome (retry ×3)
+- `workers/cleanup.worker.ts`: nightly 02:00 UTC — delete analytics >90d, abandon stale sessions >30d
+- `game.routes.ts`: fire-and-forget replaced with `enqueueAnalytics()` + DB fallback
+- `stripe.routes.ts`: `sendPaymentReceiptEmail()` enqueued on `checkout.session.completed` + `payment_intent.succeeded`
+- `index.ts`: workers start on boot, Bull Board at `/bull-board` (admin JWT), workers closed on SIGTERM
+- TypeScript: 0 errors. Branch: `feature/phase3-sponsor-portal`
+
+**Previous completed chunk (Phase 3 Track C — chunk 1):** Security & rate limiting:
 - `middleware/rateLimiter.ts`: `authLimiter` (10/15min), `gameLimiter` (60/min), `generalLimiter` (200/min) via `express-rate-limit`
 - `middleware/sanitise.ts`: strips `<script>` tags, HTML tags, null bytes from `req.body`/`query`/`params`
 - `index.ts`: `helmet()` first (security headers), rate limiters on `/api/v1`, `/api/v1/auth`, `/api/v1/game`, sanitise middleware after JSON parse
