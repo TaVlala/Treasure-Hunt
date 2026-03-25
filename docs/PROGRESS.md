@@ -114,7 +114,7 @@
 - [ ] Map view for hunt discovery
 - [x] Paid ticket purchase (Stripe Checkout — "Buy Ticket" → browser → poll for session → navigate)
 - [x] Team creation + join flow — /team/create and /team/join screens; team options shown after joining a TEAM/BOTH mode hunt
-- [ ] All clue types (image, photo challenge)
+- [x] All clue types — IMAGE renders imageUrl, TEXT_RIDDLE shows answer input, PHOTO_CHALLENGE uses expo-image-picker + GPS gate; photo method added to submit schema + FoundMethod enum
 - [ ] Hint system (costs points)
 - [x] Prize gallery (prize cards on completion screen, grand prize highlight, "Claim Prize" CTA)
 - [x] Prize detail screen (sponsor info, how-to-redeem, QR placeholder)
