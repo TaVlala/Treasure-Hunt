@@ -123,7 +123,7 @@
 - [x] Offline mode (cached clue content) — bundle fetched on hunt start, clues served from AsyncStorage cache
 - [x] Hunt history — /history tab shows completed sessions with scores and dates
 - [ ] Tourist mode ("I'm visiting [city]")
-- [ ] Social sharing
+- [x] Social sharing — Share Result button on completion screen via Share.share() (score, time, clues, deep link)
 
 ### Public Pages
 - [x] Landing page (city hero, bold design) — /  with nav, hero, features strip, CTA footer
@@ -154,7 +154,7 @@
 
 ### Mobile App
 - [ ] App Store submission (iOS + Android)
-- [ ] Achievements + badges system
+- [x] Achievements + badges system — 8 achievements, evaluateAchievements() in submit handler, GET /profile + /achievements endpoints, Profile tab with badge grid, animated toast in active screen
 - [ ] Social features (follow players, share results)
 - [ ] AR clue mode (camera-based clues)
 - [ ] Accessibility improvements

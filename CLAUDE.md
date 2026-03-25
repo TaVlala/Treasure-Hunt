@@ -43,7 +43,16 @@ hunt tickets, and tourism board contracts.
 - Admin: loading skeleton pages for hunts/players/revenue/sponsors routes; Breadcrumb component extracted.
 - TypeScript: 0 errors (ClueType import + Decimal.toNumber() in duplication; STEPS non-null assertions in wizard).
 
-**Last completed chunk:** All clue types — IMAGE / TEXT_RIDDLE / PHOTO_CHALLENGE:
+**Last completed chunk (Phase 3 Track B):** Achievements + Player Profile + Share Card:
+- `schema.prisma`: `PlayerAchievement` model (⚠️ needs `prisma migrate dev --name add_player_achievements`)
+- `lib/achievements.ts`: 8 achievement definitions + `evaluateAchievements()` hooked into submit handler; `newAchievements[]` returned in `SubmitClueResult`
+- `player.routes.ts`: `GET /player/profile` + `GET /player/achievements`
+- `profile.tsx`: new Profile tab — stats row + 3-col badge grid (earned/locked)
+- `active.tsx`: animated achievement toast on clue submit
+- `complete.tsx`: "Share Result 🎉" via `Share.share()`
+- Current branch: `feature/phase3-player-engagement`
+
+**Previous chunk:** All clue types — IMAGE / TEXT_RIDDLE / PHOTO_CHALLENGE:
 - `game.schemas.ts`: `'photo'` added to submit method enum.
 - `schema.prisma`: `PHOTO` added to `FoundMethod` enum (⚠️ needs `prisma migrate dev` when DB is available).
 - `active.tsx`: IMAGE clue renders `imageUrl` as full-width image; TEXT_RIDDLE shows answer `TextInput` + submits `method='answer'`; PHOTO_CHALLENGE uses `expo-image-picker` camera (GPS-gated), submits `method='photo'`.
