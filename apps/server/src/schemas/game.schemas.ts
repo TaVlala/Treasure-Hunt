@@ -17,7 +17,7 @@ export const joinHuntSchema = z.object({
 // Body for POST /api/v1/game/sessions/:sessionId/submit
 export const submitClueSchema = z.object({
   clueId: z.string().uuid('clueId must be a valid UUID'),
-  method: z.enum(['gps', 'qr_code', 'answer']),
+  method: z.enum(['gps', 'qr_code', 'answer', 'photo']),
   // Required when method is 'answer'
   answer: z.string().max(500).optional(),
   // Required when method is 'qr_code'

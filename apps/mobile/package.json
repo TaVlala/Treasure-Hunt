@@ -17,6 +17,7 @@
     "@treasure-hunt/shared": "*",
     "expo": "~52.0.0",
     "expo-camera": "^55.0.9",
+    "expo-image-picker": "~16.0.6",
     "expo-constants": "~17.0.0",
     "expo-location": "^55.1.2",
     "expo-notifications": "~0.29.0",

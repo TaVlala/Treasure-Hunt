@@ -1,5 +1,5 @@
 // Active hunt screen — live GPS tracking toward current clue.
-// Supports GPS proximity unlock, QR code scanning, hint reveal, and hunt completion.
+// Supports GPS proximity unlock, QR code scanning, text riddle, photo challenge, image clue, hint reveal, and hunt completion.
 // Receives sessionId + huntId as search params from the detail screen on join/resume.
 
 import {
@@ -14,11 +14,14 @@ import {
   Animated,
   Easing,
   Modal,
+  Image,
+  TextInput,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import * as Location from 'expo-location';
 import * as Haptics from 'expo-haptics';
+import * as ImagePicker from 'expo-image-picker';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { playerFetch } from '@/lib/api';
 import { loadBundle, saveBundle } from '@/lib/huntCache';
@@ -191,6 +194,11 @@ export default function ActiveHuntScreen() {
   const [distanceMeters, setDistanceMeters] = useState<number | null>(null);
   const locationSub = useRef<Location.LocationSubscription | null>(null);
 
+  // Text riddle answer state
+  const [answerInput, setAnswerInput] = useState('');
+  // Photo challenge state
+  const [photoTaken, setPhotoTaken] = useState(false);
+
   // Offline bundle cache — populated on mount from AsyncStorage or network
   const bundleClues = useRef<ClueWithSponsor[]>([]);
 
@@ -289,19 +297,21 @@ export default function ActiveHuntScreen() {
     setDistanceMeters(null);
     setQrScanned(false);
     setShowQR(false);
+    setAnswerInput('');
+    setPhotoTaken(false);
   }, [currentClue?.id]);
 
   // ---------------------------------------------------------------------------
   // Submit clue as found
   // ---------------------------------------------------------------------------
-  const onSubmit = useCallback(async (method: 'gps' | 'qr_code' = 'gps') => {
+  const onSubmit = useCallback(async (method: 'gps' | 'qr_code' | 'answer' | 'photo' = 'gps') => {
     if (!currentClue || !session) return;
     setIsSubmitting(true);
     setShowQR(false);
     try {
       const result = await playerFetch<SubmitClueResult>(
         `/api/v1/game/sessions/${sessionId}/submit`,
-        { method: 'POST', body: JSON.stringify({ clueId: currentClue.id, method }) },
+        { method: 'POST', body: JSON.stringify({ clueId: currentClue.id, method, ...(method === 'answer' && { answer: answerInput }), ...(method === 'photo' && { photoTaken: true }) }) },
       );
 
       // Haptic success feedback when a clue is found
@@ -328,7 +338,7 @@ export default function ActiveHuntScreen() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [currentClue, session, sessionId, huntId, router, getClueFromBundle]);
+  }, [currentClue, session, sessionId, huntId, router, getClueFromBundle, answerInput]);
 
   // ---------------------------------------------------------------------------
   // Hint reveal
@@ -377,6 +387,26 @@ export default function ActiveHuntScreen() {
     setQrScanned(true);
     void onSubmit('qr_code');
   }, [qrScanned, isSubmitting, onSubmit]);
+
+  // ---------------------------------------------------------------------------
+  // Photo challenge handler
+  // ---------------------------------------------------------------------------
+  const onTakePhoto = useCallback(async () => {
+    // Request camera permission if needed
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Camera required', 'Enable camera access in Settings for photo challenges.', [{ text: 'OK' }]);
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.6,
+      allowsEditing: false,
+    });
+    if (!result.canceled && result.assets.length > 0) {
+      setPhotoTaken(true);
+    }
+  }, []);
 
   // ---------------------------------------------------------------------------
   // Terminal states
@@ -451,6 +481,12 @@ export default function ActiveHuntScreen() {
   const currentProgress = session.progress.find((p) => p.clueId === currentClue.id);
   const hintAlreadyUsed = currentProgress?.hintUsed ?? false;
   const canSubmitGPS = withinRange && !isSubmitting;
+
+  const isImageClue = currentClue.clueType === 'image';
+  const isPhotoChallenge = currentClue.clueType === 'photo_challenge';
+  const isTextRiddle = currentClue.clueType === 'text_riddle';
+  const canSubmitAnswer = isTextRiddle && answerInput.trim().length > 0 && !isSubmitting;
+  const canSubmitPhoto = isPhotoChallenge && photoTaken && withinRange && !isSubmitting;
 
   return (
     <SafeAreaView style={styles.root}>
@@ -527,6 +563,23 @@ export default function ActiveHuntScreen() {
           </View>
           <Text style={styles.clueTitle}>{currentClue.title}</Text>
           <Text style={styles.clueDesc}>{currentClue.description}</Text>
+
+          {/* IMAGE clue — show image above description */}
+          {isImageClue && currentClue.imageUrl ? (
+            <Image
+              source={{ uri: currentClue.imageUrl }}
+              style={styles.clueImage}
+              resizeMode="contain"
+            />
+          ) : null}
+
+          {/* PHOTO CHALLENGE — show challenge prompt chip */}
+          {isPhotoChallenge ? (
+            <View style={styles.photoChallengePrompt}>
+              <Text style={styles.photoChallengeText}>📸 Take a photo at this location to complete the challenge</Text>
+            </View>
+          ) : null}
+
           {currentClue.unlockMessage && (withinRange || isQRClue) && (
             <View style={[styles.unlockMsg, { backgroundColor: accent + '18', borderColor: accent + '44' }]}>
               <Text style={[styles.unlockMsgText, { color: accent }]}>💡 {currentClue.unlockMessage}</Text>
@@ -583,41 +636,73 @@ export default function ActiveHuntScreen() {
             </TouchableOpacity>
           )
         )}
+
+        {/* Text riddle answer input */}
+        {isTextRiddle && (
+          <View style={styles.answerBlock}>
+            <Text style={styles.answerLabel}>Your answer</Text>
+            <TextInput
+              style={styles.answerInput}
+              value={answerInput}
+              onChangeText={setAnswerInput}
+              placeholder="Type your answer..."
+              placeholderTextColor={MUTED}
+              autoCapitalize="none"
+              returnKeyType="done"
+            />
+          </View>
+        )}
       </ScrollView>
 
       {/* Submit CTA */}
       <View style={styles.footer}>
         {isQRClue ? (
+          /* existing QR button — unchanged */
           <TouchableOpacity
             style={[styles.submitBtn, isSubmitting && styles.submitBtnDisabled, !isSubmitting && { backgroundColor: accent }]}
-            onPress={() => {
-              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              void onOpenQR();
-            }}
+            onPress={() => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); void onOpenQR(); }}
             disabled={isSubmitting}
             activeOpacity={0.8}
           >
-            {isSubmitting
-              ? <ActivityIndicator color="#000" />
-              : <Text style={styles.submitText}>Scan QR Code 📷</Text>
-            }
+            {isSubmitting ? <ActivityIndicator color="#000" /> : <Text style={styles.submitText}>Scan QR Code 📷</Text>}
           </TouchableOpacity>
+        ) : isTextRiddle ? (
+          <TouchableOpacity
+            style={[styles.submitBtn, !canSubmitAnswer && styles.submitBtnDisabled, canSubmitAnswer && { backgroundColor: accent }]}
+            onPress={() => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); void onSubmit('answer'); }}
+            disabled={!canSubmitAnswer}
+            activeOpacity={0.8}
+          >
+            {isSubmitting ? <ActivityIndicator color={canSubmitAnswer ? '#000' : MUTED} /> : <Text style={[styles.submitText, !canSubmitAnswer && styles.submitTextDisabled]}>Submit Answer</Text>}
+          </TouchableOpacity>
+        ) : isPhotoChallenge ? (
+          photoTaken ? (
+            <TouchableOpacity
+              style={[styles.submitBtn, !canSubmitPhoto && styles.submitBtnDisabled, canSubmitPhoto && { backgroundColor: accent }]}
+              onPress={() => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); void onSubmit('photo'); }}
+              disabled={!canSubmitPhoto}
+              activeOpacity={0.8}
+            >
+              {isSubmitting ? <ActivityIndicator color={canSubmitPhoto ? '#000' : MUTED} /> : <Text style={[styles.submitText, !canSubmitPhoto && styles.submitTextDisabled]}>{withinRange ? 'Submit Photo ✓' : `Get closer — ${dist ? `${dist.value} ${dist.unit}` : '...'}`}</Text>}
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={[styles.submitBtn, { backgroundColor: accent }]}
+              onPress={() => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); void onTakePhoto(); }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.submitText}>Take Photo 📸</Text>
+            </TouchableOpacity>
+          )
         ) : (
+          /* existing GPS button — unchanged */
           <TouchableOpacity
             style={[styles.submitBtn, !canSubmitGPS && styles.submitBtnDisabled, canSubmitGPS && { backgroundColor: accent }]}
-            onPress={() => {
-              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              void onSubmit('gps');
-            }}
+            onPress={() => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); void onSubmit('gps'); }}
             disabled={!canSubmitGPS}
             activeOpacity={0.8}
           >
-            {isSubmitting
-              ? <ActivityIndicator color={canSubmitGPS ? '#000' : MUTED} />
-              : <Text style={[styles.submitText, !canSubmitGPS && styles.submitTextDisabled]}>
-                  {withinRange ? "I'm Here! 📍" : dist ? `${dist.value} ${dist.unit} away` : 'Locating...'}
-                </Text>
-            }
+            {isSubmitting ? <ActivityIndicator color={canSubmitGPS ? '#000' : MUTED} /> : <Text style={[styles.submitText, !canSubmitGPS && styles.submitTextDisabled]}>{withinRange ? "I'm Here! 📍" : dist ? `${dist.value} ${dist.unit} away` : 'Locating...'}</Text>}
           </TouchableOpacity>
         )}
       </View>
@@ -691,6 +776,9 @@ const styles = StyleSheet.create({
   bonusText: { color: ACCENT, fontSize: 10, fontWeight: '700' },
   clueTitle: { color: TEXT, fontSize: 20, fontWeight: '800', letterSpacing: -0.4, marginBottom: 8 },
   clueDesc: { color: MUTED, fontSize: 15, lineHeight: 22 },
+  clueImage: { width: '100%', height: 200, borderRadius: 10, marginTop: 12, marginBottom: 4, backgroundColor: SURFACE2 },
+  photoChallengePrompt: { marginTop: 12, backgroundColor: SURFACE2, borderRadius: 8, padding: 10, borderWidth: 1, borderColor: BORDER },
+  photoChallengeText: { color: MUTED, fontSize: 13, lineHeight: 18 },
   unlockMsg: { marginTop: 12, backgroundColor: ACCENT + '18', borderRadius: 8, padding: 10, borderWidth: 1, borderColor: ACCENT + '44' },
   unlockMsgText: { color: ACCENT, fontSize: 13, fontWeight: '500', lineHeight: 18 },
 
@@ -709,6 +797,10 @@ const styles = StyleSheet.create({
   hintRevealedLabel: { color: ACCENT, fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 },
   hintRevealedText: { color: TEXT, fontSize: 14, lineHeight: 20 },
   hintUsedNote: { color: MUTED, fontSize: 11, marginTop: 6 },
+
+  answerBlock: { backgroundColor: SURFACE, borderRadius: 14, borderWidth: 1, borderColor: BORDER, padding: 14, marginBottom: 12 },
+  answerLabel: { color: MUTED, fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
+  answerInput: { backgroundColor: SURFACE2, borderRadius: 8, borderWidth: 1, borderColor: BORDER, paddingHorizontal: 14, paddingVertical: 10, color: TEXT, fontSize: 15 },
 
   footer: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 16, paddingBottom: 28, backgroundColor: BG, borderTopWidth: 1, borderTopColor: BORDER },
   submitBtn: { backgroundColor: ACCENT, borderRadius: 14, paddingVertical: 16, alignItems: 'center', justifyContent: 'center' },

@@ -338,11 +338,12 @@ router.post(
           throw new AppError('Incorrect answer', 400, 'WRONG_ANSWER');
         }
       }
-      // GPS and QR_CODE methods are validated by proximity-check / QR scanning on the client;
-      // server trusts the method field for those (client already confirmed location/QR).
+      // GPS, QR_CODE, and PHOTO methods are validated by proximity-check / QR scanning / photo
+      // capture on the client; server trusts the method field for those (client already confirmed
+      // location/QR/photo). No extra server-side validation needed for 'photo'.
 
       const pointsEarned = progress.clue.points;
-      const dbMethod = body.method.toUpperCase() as 'GPS' | 'QR_CODE' | 'ANSWER';
+      const dbMethod = body.method.toUpperCase() as 'GPS' | 'QR_CODE' | 'ANSWER' | 'PHOTO';
 
       // Find the next clue in order so we can unlock it
       const nextClueRow = await prisma.clue.findFirst({
