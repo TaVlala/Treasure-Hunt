@@ -49,7 +49,14 @@ hunt tickets, and tourism board contracts.
 - `active.tsx`: IMAGE clue renders `imageUrl` as full-width image; TEXT_RIDDLE shows answer `TextInput` + submits `method='answer'`; PHOTO_CHALLENGE uses `expo-image-picker` camera (GPS-gated), submits `method='photo'`.
 - `expo-image-picker ~16.0.6` added to mobile dependencies.
 
-**Planned next chunk:** Embeddable hotel widget, or map view for hunt discovery.
+**Last completed chunk:** Embeddable hotel widget:
+- `apps/server/src/index.ts`: `cors({ origin: '*' })` for `/api/v1/public/*` — allows hotel cross-origin embeds.
+- `apps/admin/src/app/embed/hunts/page.tsx`: standalone iframe widget (no dashboard chrome); dark theme; hunt cards with difficulty, price, clue count; "Join the Hunt →" → `https://treasurehunt.app/hunt/:id`; `?city=` pre-filter.
+- `apps/admin/src/app/embed/layout.tsx`: server layout sets `robots:noindex` for all `/embed/*` routes.
+- `apps/admin/src/app/(dashboard)/embed-code/page.tsx`: live preview iframe + copy-pasteable `<iframe>` snippet + city input.
+- `Sidebar.tsx`: "Embed Widget" nav item added.
+
+**Planned next chunk:** Map view already done. Phase 2 feature-complete — ready to merge to main, or start Phase 3.
 
 **Known fix:** Express 5 `ParamsDictionary` types named params as `string | string[]` — always extract with `req.params['key'] as string` in route handlers.
 

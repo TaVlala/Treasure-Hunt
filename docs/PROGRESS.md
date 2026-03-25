@@ -129,7 +129,7 @@
 - [x] Landing page (city hero, bold design) — /  with nav, hero, features strip, CTA footer
 - [x] Active hunts directory — /discover with city/title text filter, hunt cards grid, empty state
 - [x] Hunt detail (public, SEO) — /discover/:slug with generateMetadata, full public detail page
-- [ ] Embeddable widget for hotels
+- [x] Embeddable hotel widget — /embed/hunts iframe page (dark, city-filterable, noindex); /embed-code snippet generator in dashboard; wildcard CORS on /api/v1/public/*
 - [x] About / How it works page — /about with player steps, sponsor section, FAQ
 
 ---
