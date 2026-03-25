@@ -30,3 +30,13 @@ export const loginSchema = z.object({
 
 export type RegisterBody = z.infer<typeof registerSchema>;
 export type LoginBody = z.infer<typeof loginSchema>;
+
+export const sponsorRegisterSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8),
+  businessName: z.string().min(2).max(200),
+  contactName: z.string().max(100).optional(),
+  address: z.string().min(5),
+  tier: z.enum(['BASIC', 'FEATURED', 'PRIZE']).default('BASIC'),
+});
+export type SponsorRegisterBody = z.infer<typeof sponsorRegisterSchema>;

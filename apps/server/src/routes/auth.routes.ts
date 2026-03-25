@@ -7,7 +7,7 @@ import { prisma } from '../config/database';
 import { AppError } from '../middleware/errorHandler';
 import { hashPassword, comparePassword } from '../lib/password';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../lib/jwt';
-import { registerSchema, loginSchema } from '../schemas/auth.schemas';
+import { registerSchema, loginSchema, sponsorRegisterSchema } from '../schemas/auth.schemas';
 import type { ApiSuccess, AuthUser } from '@treasure-hunt/shared';
 
 const router = Router();
@@ -25,8 +25,10 @@ const REFRESH_COOKIE_OPTIONS = {
 };
 
 // Maps the Prisma enum value to the shared UserRole type
-function toSharedRole(prismaRole: string): 'admin' | 'player' {
-  return prismaRole === 'ADMIN' ? 'admin' : 'player';
+function toSharedRole(prismaRole: string): 'admin' | 'player' | 'sponsor' {
+  if (prismaRole === 'ADMIN') return 'admin';
+  if (prismaRole === 'SPONSOR') return 'sponsor';
+  return 'player';
 }
 
 // Builds the AuthUser shape returned from register and login
@@ -45,7 +47,7 @@ function buildAuthUser(
   return {
     id: user.id,
     email: user.email,
-    role: toSharedRole(user.role),
+    role: toSharedRole(user.role) as AuthUser['role'],
     displayName: user.displayName,
     avatarUrl: user.avatarUrl,
     homeCity: user.homeCity,
@@ -176,6 +178,85 @@ router.post('/logout', (_req: Request, res: Response) => {
     message: 'Logged out successfully',
   };
   res.status(200).json(response);
+});
+
+// --- POST /sponsor/register ---
+// Creates a User(SPONSOR) + Sponsor record in one transaction. Returns access token.
+router.post('/sponsor/register', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const body = sponsorRegisterSchema.parse(req.body);
+
+    // Reject duplicate emails before trying to insert
+    const existing = await prisma.user.findUnique({ where: { email: body.email } });
+    if (existing) throw new AppError('Email already registered', 409, 'CONFLICT');
+
+    const passwordHash = await hashPassword(body.password);
+
+    const { user, sponsor } = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          email: body.email,
+          passwordHash,
+          displayName: body.businessName,
+          role: 'SPONSOR',
+        },
+      });
+      const sponsor = await tx.sponsor.create({
+        data: {
+          businessName: body.businessName,
+          contactName: body.contactName ?? null,
+          contactEmail: body.email,
+          address: body.address,
+          tier: body.tier,
+          latitude: 0,   // placeholder — sponsor updates location later
+          longitude: 0,
+          userId: user.id,
+        },
+      });
+      return { user, sponsor };
+    });
+
+    const accessToken = signAccessToken({ sub: user.id, email: user.email, role: user.role });
+    const refreshToken = signRefreshToken(user.id);
+    res.cookie(REFRESH_COOKIE, refreshToken, REFRESH_COOKIE_OPTIONS);
+
+    res.status(201).json({
+      success: true,
+      data: {
+        accessToken,
+        user: { id: user.id, email: user.email, displayName: user.displayName, role: 'sponsor' },
+        sponsorId: sponsor.id,
+      },
+    });
+  } catch (e) { next(e); }
+});
+
+// --- POST /sponsor/login ---
+// Standard login but enforces role === SPONSOR.
+router.post('/sponsor/login', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const body = loginSchema.parse(req.body);
+    const user = await prisma.user.findUnique({ where: { email: body.email } });
+    if (!user || user.role !== 'SPONSOR') throw new AppError('Invalid credentials', 401, 'UNAUTHORIZED');
+    const valid = await comparePassword(body.password, user.passwordHash);
+    if (!valid) throw new AppError('Invalid credentials', 401, 'UNAUTHORIZED');
+
+    // Load linked sponsor id
+    const sponsor = await prisma.sponsor.findUnique({ where: { userId: user.id }, select: { id: true } });
+
+    const accessToken = signAccessToken({ sub: user.id, email: user.email, role: user.role });
+    const refreshToken = signRefreshToken(user.id);
+    res.cookie(REFRESH_COOKIE, refreshToken, REFRESH_COOKIE_OPTIONS);
+
+    res.json({
+      success: true,
+      data: {
+        accessToken,
+        user: { id: user.id, email: user.email, displayName: user.displayName, role: 'sponsor' },
+        sponsorId: sponsor?.id ?? null,
+      },
+    });
+  } catch (e) { next(e); }
 });
 
 export default router;

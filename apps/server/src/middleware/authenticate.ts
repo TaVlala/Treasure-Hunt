@@ -11,7 +11,7 @@ import type { UserRole } from '@treasure-hunt/shared';
 export interface AuthenticatedUser {
   id: string;
   email: string;
-  role: UserRole; // shared type: 'admin' | 'player'
+  role: UserRole; // shared type: 'admin' | 'player' | 'sponsor'
 }
 
 // Extend Express Request so TypeScript knows req.user exists on protected routes
@@ -40,7 +40,7 @@ export function authenticate(req: Request, _res: Response, next: NextFunction): 
     req.user = {
       id: payload.sub,
       email: payload.email,
-      role: payload.role === 'ADMIN' ? 'admin' : 'player',
+      role: payload.role === 'ADMIN' ? 'admin' : payload.role === 'SPONSOR' ? 'sponsor' : 'player',
     };
     next();
   } catch {

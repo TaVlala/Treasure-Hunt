@@ -25,6 +25,7 @@ import gameRouter from './routes/game.routes';
 import playerRouter from './routes/player.routes';
 import uploadRouter from './routes/upload.routes';
 import publicRouter from './routes/public.routes';
+import sponsorPortalRouter from './routes/sponsor.portal.routes';
 import { errorHandler } from './middleware/errorHandler';
 
 const app = express();
@@ -103,6 +104,9 @@ app.use('/api/v1/public', cors({ origin: '*' }));
 
 // Public hunt discovery — no auth required, used by landing pages and SEO
 app.use('/api/v1/public', publicRouter);
+
+// Sponsor self-serve portal (requires SPONSOR JWT)
+app.use('/api/v1/sponsor', sponsorPortalRouter);
 
 // --- Error handling ---
 

@@ -18,6 +18,7 @@ datasource db {
 enum UserRole {
   ADMIN
   PLAYER
+  SPONSOR
 }
 
 enum HuntDifficulty {
@@ -151,6 +152,7 @@ model User {
   redemptions     Redemption[]
   analyticsEvents AnalyticsEvent[]
   achievements    PlayerAchievement[]
+  ownedSponsor    Sponsor?
 
   @@map("users")
 }
@@ -260,6 +262,8 @@ model Sponsor {
   contractEnd     DateTime?     @map("contract_end") @db.Date
   monthlyFeeCents Int?          @map("monthly_fee_cents")
   notes           String?       @db.Text
+  userId          String?       @unique @map("user_id") @db.Uuid
+  user            User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
   createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz()
 

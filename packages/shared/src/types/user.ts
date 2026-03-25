@@ -1,7 +1,7 @@
 // Shared user types used by both the mobile app and admin panel.
 // Keep these in sync with the Prisma schema in apps/server/prisma/schema.prisma.
 
-export type UserRole = 'admin' | 'player';
+export type UserRole = 'admin' | 'player' | 'sponsor';
 
 export interface User {
   id: string;
