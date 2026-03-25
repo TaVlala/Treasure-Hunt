@@ -155,7 +155,7 @@
 ### Mobile App
 - [ ] App Store submission (iOS + Android)
 - [x] Achievements + badges system — 8 achievements, evaluateAchievements() in submit handler, GET /profile + /achievements endpoints, Profile tab with badge grid, animated toast in active screen
-- [ ] Social features (follow players, share results)
+- [x] Social features — tappable leaderboard profiles (public stats + rival badge + top achievements modal), achievement push notifications
 - [ ] AR clue mode (camera-based clues)
 - [ ] Accessibility improvements
 - [ ] Performance optimization at scale

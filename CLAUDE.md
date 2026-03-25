@@ -43,7 +43,13 @@ hunt tickets, and tourism board contracts.
 - Admin: loading skeleton pages for hunts/players/revenue/sponsors routes; Breadcrumb component extracted.
 - TypeScript: 0 errors (ClueType import + Decimal.toNumber() in duplication; STEPS non-null assertions in wizard).
 
-**Last completed chunk (Phase 3 Track B):** Achievements + Player Profile + Share Card:
+**Last completed chunk (Phase 3 Track B — chunk 2):** Achievement push notifications + Public player profiles:
+- `game.routes.ts`: push notification fired per new achievement after evaluateAchievements()
+- `player.routes.ts`: `GET /player/players/:playerId/public` — public stats + top 3 achievements
+- `leaderboard.tsx`: tappable rows → bottom-sheet modal with stats, rival badge (⚔️), achievements
+- `hunt.ts` (shared): `PublicPlayerProfile` type
+
+**Previous chunk (Phase 3 Track B — chunk 1):** Achievements + Player Profile + Share Card:
 - `schema.prisma`: `PlayerAchievement` model (⚠️ needs `prisma migrate dev --name add_player_achievements`)
 - `lib/achievements.ts`: 8 achievement definitions + `evaluateAchievements()` hooked into submit handler; `newAchievements[]` returned in `SubmitClueResult`
 - `player.routes.ts`: `GET /player/profile` + `GET /player/achievements`
