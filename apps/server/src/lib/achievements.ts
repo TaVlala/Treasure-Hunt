@@ -21,6 +21,7 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'explorer',         name: 'Explorer',          description: 'Complete 3 different hunts',                      icon: '🧭' },
   { id: 'bonus_hunter',     name: 'Bonus Hunter',      description: 'Find 3 bonus clues',                              icon: '⭐' },
   { id: 'point_collector',  name: 'High Scorer',       description: 'Earn 500 total points',                           icon: '💎' },
+  { id: 'streak_3',         name: 'On a Roll',         description: 'Play hunts on 3 consecutive days',                icon: '🔥' },
 ];
 
 // Evaluates which achievements the player has just unlocked and persists them.
@@ -98,6 +99,35 @@ export async function evaluateAchievements(
   }
 
   check('point_collector', totalPoints >= 500);
+
+  // streak_3: played on 3 consecutive calendar days
+  if (!earnedSet.has('streak_3')) {
+    const allSessions = await prisma.gameSession.findMany({
+      where: { playerId },
+      select: { startedAt: true },
+      orderBy: { startedAt: 'asc' },
+    });
+
+    // Extract unique calendar dates (YYYY-MM-DD) sorted ascending
+    const uniqueDates = [...new Set(
+      allSessions.map((s) => s.startedAt.toISOString().slice(0, 10))
+    )].sort();
+
+    let maxStreak = uniqueDates.length > 0 ? 1 : 0;
+    let currentStreak = maxStreak;
+    for (let i = 1; i < uniqueDates.length; i++) {
+      const prev = new Date(uniqueDates[i - 1]!);
+      const curr = new Date(uniqueDates[i]!);
+      const diffDays = Math.round((curr.getTime() - prev.getTime()) / 86_400_000);
+      if (diffDays === 1) {
+        currentStreak++;
+        maxStreak = Math.max(maxStreak, currentStreak);
+      } else {
+        currentStreak = 1;
+      }
+    }
+    if (maxStreak >= 3) newIds.push('streak_3');
+  }
 
   // 4. If nothing new, return early
   if (newIds.length === 0) {

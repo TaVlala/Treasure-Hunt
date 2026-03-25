@@ -9,6 +9,7 @@ import { authenticate } from '../middleware/authenticate';
 import { AppError } from '../middleware/errorHandler';
 import { ACHIEVEMENTS } from '../lib/achievements';
 import type { AchievementDef } from '../lib/achievements';
+import { getTier } from '../lib/playerTier';
 import type {
   ApiSuccess,
   Hunt,
@@ -716,6 +717,8 @@ router.get('/profile', async (req: Request, res: Response, next: NextFunction) =
       prisma.playerAchievement.findMany({ where: { playerId }, orderBy: { earnedAt: 'asc' } }),
     ]);
 
+    const tier = getTier(totalStats._sum.score ?? 0);
+
     const response: ApiSuccess<{
       player: typeof player;
       stats: {
@@ -723,6 +726,7 @@ router.get('/profile', async (req: Request, res: Response, next: NextFunction) =
         totalPoints: number;
         totalCluesFound: number;
         achievementsEarned: number;
+        tier: { label: 'Bronze' | 'Silver' | 'Gold' | 'Platinum'; icon: string; color: string; minPoints: number };
       };
       earnedAchievements: Array<{ id: string; earnedAt: string; name?: string; description?: string; icon?: string }>;
     }> = {
@@ -734,6 +738,7 @@ router.get('/profile', async (req: Request, res: Response, next: NextFunction) =
           totalPoints: totalStats._sum.score ?? 0,
           totalCluesFound: totalStats._sum.cluesFound ?? 0,
           achievementsEarned: earnedAchievements.length,
+          tier: { label: tier.label, icon: tier.icon, color: tier.color, minPoints: tier.minPoints },
         },
         earnedAchievements: earnedAchievements.map((a) => ({
           id: a.achievementId,

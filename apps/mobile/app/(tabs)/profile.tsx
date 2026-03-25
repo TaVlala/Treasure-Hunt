@@ -48,6 +48,12 @@ type PlayerProfile = {
     totalPoints: number;
     totalCluesFound: number;
     achievementsEarned: number;
+    tier?: {
+      label: string;
+      icon: string;
+      color: string;
+      minPoints: number;
+    };
   };
   earnedAchievements: Array<{
     id: string;
@@ -247,6 +253,12 @@ export default function ProfileScreen() {
             {fmtMemberSince(user.createdAt)}
           </Text>
         ) : null}
+        {profile?.stats.tier && (
+          <View style={[styles.tierBadge, { borderColor: profile.stats.tier.color + '55', backgroundColor: profile.stats.tier.color + '18' }]}>
+            <Text style={styles.tierIcon}>{profile.stats.tier.icon}</Text>
+            <Text style={[styles.tierLabel, { color: profile.stats.tier.color }]}>{profile.stats.tier.label}</Text>
+          </View>
+        )}
       </View>
       <TouchableOpacity
         style={styles.logoutButton}
@@ -344,7 +356,7 @@ export default function ProfileScreen() {
             <View style={styles.statDivider} />
             <StatCol value={stats.totalPoints}      label="Points" icon="💎" />
             <View style={styles.statDivider} />
-            <StatCol value={stats.achievementsEarned} label="Badges" icon="🏆" />
+            <StatCol value={stats.achievementsEarned} label="Badges" icon={stats.tier?.icon ?? '🏆'} />
           </View>
         </View>
 
@@ -433,6 +445,25 @@ const styles = StyleSheet.create({
     color: MUTED,
     fontSize: 12,
     fontWeight: '600',
+    letterSpacing: 0.3,
+  },
+  tierBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    alignSelf: 'flex-start',
+    marginTop: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  tierIcon: {
+    fontSize: 14,
+  },
+  tierLabel: {
+    fontSize: 12,
+    fontWeight: '700',
     letterSpacing: 0.3,
   },
 

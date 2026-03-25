@@ -109,6 +109,14 @@ export interface HuntBundle {
   cachedAt: string;
 }
 
+// Player tier info — returned as part of PlayerProfile stats
+export type PlayerTierInfo = {
+  label: 'Bronze' | 'Silver' | 'Gold' | 'Platinum';
+  icon: string;
+  color: string;
+  minPoints: number;
+};
+
 // Achievement definition (hardcoded catalogue) — id matches server lib/achievements.ts
 export type AchievementDef = {
   id: string;
@@ -131,6 +139,7 @@ export type PlayerProfile = {
     totalPoints: number;
     totalCluesFound: number;
     achievementsEarned: number;
+    tier: PlayerTierInfo;
   };
   earnedAchievements: (AchievementDef & { earnedAt: string })[];
 };
