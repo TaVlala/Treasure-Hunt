@@ -43,7 +43,12 @@ hunt tickets, and tourism board contracts.
 - Admin: loading skeleton pages for hunts/players/revenue/sponsors routes; Breadcrumb component extracted.
 - TypeScript: 0 errors (ClueType import + Decimal.toNumber() in duplication; STEPS non-null assertions in wizard).
 
-**Planned next chunk:** Offline clue caching strategy, or: embeddable hotel widget, or: all clue types (image + photo challenge).
+**Last completed chunk:** Offline clue caching:
+- `GET /api/v1/player/hunts/:huntId/bundle` — returns full hunt + all clues in one payload; `HuntBundle` type in shared package.
+- `apps/mobile/lib/huntCache.ts` — AsyncStorage cache, 24h TTL, saveBundle/loadBundle/clearBundle.
+- Active hunt screen: fetches bundle on mount (from cache or network), serves clues from cache first, falls back to individual fetch on cache miss.
+
+**Planned next chunk:** Embeddable hotel widget, or all clue types (image + photo challenge), or map view for hunt discovery.
 
 **Known fix:** Express 5 `ParamsDictionary` types named params as `string | string[]` — always extract with `req.params['key'] as string` in route handlers.
 

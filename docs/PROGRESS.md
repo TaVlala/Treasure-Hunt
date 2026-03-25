@@ -96,7 +96,7 @@
 - [x] Sponsor analytics endpoints — GET /admin/analytics/sponsors/:sponsorId (clue visits, prize stats, redemption rate)
 - [x] Revenue summary endpoint — GET /admin/analytics/revenue (totals, monthly breakdown, recent payments)
 - [x] Hunt duplication endpoint — POST /admin/hunts/:id/duplicate clones hunt + all clues as new DRAFT
-- [ ] Offline data caching strategy
+- [x] Offline data caching strategy — GET /player/hunts/:huntId/bundle endpoint; mobile huntCache.ts (AsyncStorage, 24h TTL); active screen reads from cache first
 
 ### Admin Panel
 - [x] Hunt creation wizard (multi-step) — 5-step wizard: Basics → Settings → Schedule+Map → Images → SEO+Whitelabel
@@ -120,7 +120,7 @@
 - [x] Prize detail screen (sponsor info, how-to-redeem, QR placeholder)
 - [x] Prize redemption QR screen (tap-to-generate QR, white QR card, redeemed/expired status badges)
 - [x] Push notification handling (expo-notifications registered on login/restore, foreground handler configured)
-- [ ] Offline mode (cached clue content)
+- [x] Offline mode (cached clue content) — bundle fetched on hunt start, clues served from AsyncStorage cache
 - [x] Hunt history — /history tab shows completed sessions with scores and dates
 - [ ] Tourist mode ("I'm visiting [city]")
 - [ ] Social sharing
