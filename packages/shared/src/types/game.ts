@@ -49,6 +49,7 @@ export interface SubmitClueResult {
   clueProgress: ClueProgress;  // progress record for the clue just found
   nextClue: Clue | null;       // null when the hunt is complete
   huntComplete: boolean;
+  newAchievements: Array<{ id: string; name: string; description: string; icon: string }>;
 }
 
 // Result returned by GET /api/v1/game/sessions/:sessionId

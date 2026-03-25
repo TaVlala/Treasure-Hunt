@@ -108,3 +108,29 @@ export interface HuntBundle {
   clues: ClueWithSponsor[];
   cachedAt: string;
 }
+
+// Achievement definition (hardcoded catalogue) — id matches server lib/achievements.ts
+export type AchievementDef = {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+};
+
+// Achievement with earned status — returned by GET /player/achievements
+export type PlayerAchievement = AchievementDef & {
+  earned: boolean;
+  earnedAt: string | null;
+};
+
+// Full player profile response — returned by GET /player/profile
+export type PlayerProfile = {
+  player: { id: string; displayName: string; email: string; createdAt: string };
+  stats: {
+    huntsCompleted: number;
+    totalPoints: number;
+    totalCluesFound: number;
+    achievementsEarned: number;
+  };
+  earnedAchievements: (AchievementDef & { earnedAt: string })[];
+};

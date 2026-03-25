@@ -199,6 +199,10 @@ export default function ActiveHuntScreen() {
   // Photo challenge state
   const [photoTaken, setPhotoTaken] = useState(false);
 
+  // Achievement toast state
+  const [achievementToast, setAchievementToast] = useState<{ name: string; icon: string } | null>(null);
+  const toastAnim = useRef(new Animated.Value(0)).current;
+
   // Offline bundle cache — populated on mount from AsyncStorage or network
   const bundleClues = useRef<ClueWithSponsor[]>([]);
 
@@ -210,6 +214,19 @@ export default function ActiveHuntScreen() {
       bundleClues.current.find((c) => c.id === clueId),
     [],
   );
+
+  // ---------------------------------------------------------------------------
+  // Achievement toast helper — animates in, holds, then fades out
+  // ---------------------------------------------------------------------------
+  const showAchievementToast = useCallback((achievement: { name: string; icon: string }) => {
+    setAchievementToast(achievement);
+    toastAnim.setValue(0);
+    Animated.sequence([
+      Animated.timing(toastAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
+      Animated.delay(2500),
+      Animated.timing(toastAnim, { toValue: 0, duration: 300, useNativeDriver: true }),
+    ]).start(() => setAchievementToast(null));
+  }, [toastAnim]);
 
   // ---------------------------------------------------------------------------
   // Load session + current clue on mount
@@ -317,6 +334,11 @@ export default function ActiveHuntScreen() {
       // Haptic success feedback when a clue is found
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
+      if (result.newAchievements && result.newAchievements.length > 0) {
+        const first = result.newAchievements[0]!;
+        showAchievementToast({ name: first.name, icon: first.icon });
+      }
+
       if (result.huntComplete) {
         router.replace(`/hunt/${huntId}/complete?sessionId=${sessionId}`);
         return;
@@ -338,7 +360,7 @@ export default function ActiveHuntScreen() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [currentClue, session, sessionId, huntId, router, getClueFromBundle, answerInput]);
+  }, [currentClue, session, sessionId, huntId, router, getClueFromBundle, answerInput, showAchievementToast]);
 
   // ---------------------------------------------------------------------------
   // Hint reveal
@@ -490,6 +512,26 @@ export default function ActiveHuntScreen() {
 
   return (
     <SafeAreaView style={styles.root}>
+      {/* Achievement toast — absolutely positioned, non-interactive */}
+      {achievementToast && (
+        <Animated.View
+          style={[
+            styles.achievementToast,
+            {
+              opacity: toastAnim,
+              transform: [{ translateY: toastAnim.interpolate({ inputRange: [0, 1], outputRange: [-20, 0] }) }],
+            },
+          ]}
+          pointerEvents="none"
+        >
+          <Text style={styles.toastIcon}>{achievementToast.icon}</Text>
+          <View>
+            <Text style={styles.toastLabel}>Achievement Unlocked!</Text>
+            <Text style={styles.toastName}>{achievementToast.name}</Text>
+          </View>
+        </Animated.View>
+      )}
+
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
@@ -824,4 +866,17 @@ const styles = StyleSheet.create({
   stateBody: { color: MUTED, fontSize: 14, textAlign: 'center', lineHeight: 20, marginBottom: 24 },
   accentBtn: { backgroundColor: ACCENT, borderRadius: 10, paddingHorizontal: 24, paddingVertical: 12 },
   accentBtnText: { color: '#000', fontWeight: '700', fontSize: 14 },
+
+  // Achievement toast
+  achievementToast: {
+    position: 'absolute', top: 60, left: 16, right: 16, zIndex: 100,
+    backgroundColor: '#1c1c1c', borderRadius: 14, borderWidth: 1,
+    borderColor: '#f59e0b55', padding: 14, flexDirection: 'row',
+    alignItems: 'center', gap: 12,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4, shadowRadius: 8, elevation: 8,
+  },
+  toastIcon: { fontSize: 28 },
+  toastLabel: { color: '#f59e0b', fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  toastName: { color: '#ffffff', fontSize: 15, fontWeight: '700', marginTop: 2 },
 });

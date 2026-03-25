@@ -150,6 +150,7 @@ model User {
   teamMembers     TeamMember[]
   redemptions     Redemption[]
   analyticsEvents AnalyticsEvent[]
+  achievements    PlayerAchievement[]
 
   @@map("users")
 }
@@ -428,6 +429,18 @@ model Payment {
   @@index([payerType, payerId])
   @@index([stripePaymentId])
   @@map("payments")
+}
+
+model PlayerAchievement {
+  id            String   @id @default(uuid())
+  playerId      String   @map("player_id")
+  achievementId String   @map("achievement_id") @db.VarChar(50)
+  earnedAt      DateTime @default(now()) @map("earned_at")
+
+  player User @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, achievementId])
+  @@map("player_achievements")
 }
 
 model AnalyticsEvent {

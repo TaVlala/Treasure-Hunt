@@ -14,12 +14,13 @@ import {
   Easing,
   Image,
   Dimensions,
+  Share,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import * as Haptics from 'expo-haptics';
 import { playerFetch } from '@/lib/api';
-import type { SessionWithProgress, LeaderboardEntry, SponsorPrize, PrizeType } from '@treasure-hunt/shared';
+import type { SessionWithProgress, LeaderboardEntry, SponsorPrize, PrizeType, Hunt } from '@treasure-hunt/shared';
 
 // ---------------------------------------------------------------------------
 // Design tokens
@@ -311,6 +312,7 @@ export default function CompleteScreen() {
   const router = useRouter();
 
   const [session, setSession] = useState<SessionWithProgress | null>(null);
+  const [hunt, setHunt] = useState<Hunt | null>(null);
   const [myEntry, setMyEntry] = useState<LeaderboardEntry | null>(null);
   const [totalPlayers, setTotalPlayers] = useState(0);
   const [prizes, setPrizes] = useState<SponsorPrize[]>([]);
@@ -329,15 +331,17 @@ export default function CompleteScreen() {
   useEffect(() => {
     void (async () => {
       try {
-        // Fetch session, leaderboard, and prizes in parallel
-        const [sess, entries, earnedPrizes] = await Promise.all([
+        // Fetch session, leaderboard, prizes, and hunt info in parallel
+        const [sess, entries, earnedPrizes, huntData] = await Promise.all([
           playerFetch<SessionWithProgress>(`/api/v1/game/sessions/${sessionId}`),
           playerFetch<LeaderboardEntry[]>(`/api/v1/game/hunts/${huntId}/leaderboard?limit=200`),
           playerFetch<SponsorPrize[]>(
             `/api/v1/player/hunts/${huntId}/prizes?sessionId=${sessionId}`,
           ).catch(() => [] as SponsorPrize[]), // prizes are optional — don't block on failure
+          playerFetch<Hunt>(`/api/v1/player/hunts/${huntId}`).catch(() => null),
         ]);
         setSession(sess);
+        setHunt(huntData);
         setTotalPlayers(entries.length);
         const found = entries.find((e) => e.playerId === sess.playerId);
         setMyEntry(found ?? null);
@@ -364,6 +368,23 @@ export default function CompleteScreen() {
   function handleClaim(prize: SponsorPrize) {
     router.push(`/hunt/${huntId}/prize/${prize.id}?sessionId=${sessionId}`);
   }
+
+  // Share the hunt result via the native share sheet
+  const onShare = useCallback(async () => {
+    if (!session) return;
+    const duration = session.timeTakenSecs ? `${Math.round(session.timeTakenSecs / 60)}m` : null;
+    const message = [
+      `🗺️ I just completed "${hunt?.title ?? 'a Treasure Hunt'}"!`,
+      ``,
+      `📍 Score: ${session.score} pts`,
+      duration ? `⏱️ Time: ${duration}` : null,
+      `🔍 Clues found: ${session.cluesFound}`,
+      ``,
+      `Play Treasure Hunt 👉 https://treasurehunt.app`,
+    ].filter(Boolean).join('\n');
+
+    await Share.share({ message });
+  }, [session, hunt]);
 
   // ---------------------------------------------------------------------------
   // Loading state
@@ -509,6 +530,14 @@ export default function CompleteScreen() {
             >
               <Text style={styles.secondaryBtnText}>View Full Leaderboard</Text>
             </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.shareBtn}
+              onPress={() => void onShare()}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.shareBtnText}>Share Result 🎉</Text>
+            </TouchableOpacity>
           </View>
 
         </Animated.View>
@@ -650,6 +679,16 @@ const styles = StyleSheet.create({
   claimBtnTextGrand: { color: '#000' },
 
   btnStack: { gap: 12 },
+  shareBtn: {
+    backgroundColor: SURFACE2,
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: BORDER,
+    marginTop: 10,
+  },
+  shareBtnText: { color: TEXT, fontSize: 15, fontWeight: '700' },
   primaryBtn: {
     backgroundColor: ACCENT,
     borderRadius: 14,

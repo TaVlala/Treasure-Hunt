@@ -1,6 +1,6 @@
 // Tabs layout — bottom tab navigator for authenticated screens.
 // Redirects to the login screen if the user is not authenticated.
-// Tabs: Discover (hunt list) · History (past sessions).
+// Tabs: Discover (hunt list) · History (past sessions) · Profile (stats + achievements).
 
 import { Tabs, Redirect } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
@@ -68,6 +68,15 @@ export default function TabsLayout() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: 'Profile',
+          tabBarIcon: ({ color }) => (
+            <ProfileIcon color={color} />
+          ),
+        }}
+      />
     </Tabs>
   );
 }
@@ -87,6 +96,33 @@ function CompassIcon({ color }: { color: string }) {
       }}>
         <View style={{ width: 2, height: 2, borderRadius: 1, backgroundColor: color }} />
       </View>
+    </View>
+  );
+}
+
+// Profile icon — a simple person silhouette (head circle + body arc) rendered via views
+function ProfileIcon({ color }: { color: string }) {
+  return (
+    <View style={{ width: 22, height: 22, alignItems: 'center', justifyContent: 'center' }}>
+      {/* Head */}
+      <View style={{
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        borderWidth: 1.5,
+        borderColor: color,
+        marginBottom: 2,
+      }} />
+      {/* Shoulders — a wide arc represented as a rounded top rectangle */}
+      <View style={{
+        width: 14,
+        height: 7,
+        borderTopLeftRadius: 7,
+        borderTopRightRadius: 7,
+        borderWidth: 1.5,
+        borderBottomWidth: 0,
+        borderColor: color,
+      }} />
     </View>
   );
 }

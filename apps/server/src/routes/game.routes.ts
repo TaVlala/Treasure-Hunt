@@ -7,6 +7,7 @@ import { prisma } from '../config/database';
 import { AppError } from '../middleware/errorHandler';
 import { authenticate } from '../middleware/authenticate';
 import { sendPushNotification } from '../services/push.service';
+import { evaluateAchievements } from '../lib/achievements';
 import {
   proximityCheckSchema,
   joinHuntSchema,
@@ -452,6 +453,9 @@ router.post(
         hintUsed: updatedProgress.hintUsed,
       };
 
+      // Evaluate achievements after the transaction so the session status is committed
+      const newAchievements = await evaluateAchievements(prisma, session.playerId, sessionId);
+
       const response: ApiSuccess<SubmitClueResult> = {
         success: true,
         message: isLastClue ? 'Hunt complete!' : 'Clue found!',
@@ -460,6 +464,7 @@ router.post(
           clueProgress: clueProgressResponse,
           nextClue: nextClueRow ? toClueResponse(nextClueRow as ClueRow) : null,
           huntComplete: isLastClue,
+          newAchievements,
         },
       };
       res.status(200).json(response);

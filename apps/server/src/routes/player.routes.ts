@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { prisma } from '../config/database';
 import { authenticate } from '../middleware/authenticate';
 import { AppError } from '../middleware/errorHandler';
+import { ACHIEVEMENTS } from '../lib/achievements';
 import type {
   ApiSuccess,
   Hunt,
@@ -691,6 +692,78 @@ router.post('/device-token', async (req: Request, res: Response, next: NextFunct
     });
 
     const response: ApiSuccess<{ ok: boolean }> = { success: true, data: { ok: true } };
+    res.status(200).json(response);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /profile — returns the player's stats and earned achievements in one response.
+router.get('/profile', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const playerId = req.user!.id;
+
+    // Run all stat queries in parallel for efficiency
+    const [player, completedSessions, totalStats, earnedAchievements] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: playerId },
+        select: { id: true, displayName: true, email: true, createdAt: true },
+      }),
+      prisma.gameSession.count({ where: { playerId, status: 'COMPLETED' } }),
+      prisma.gameSession.aggregate({ where: { playerId }, _sum: { score: true, cluesFound: true } }),
+      prisma.playerAchievement.findMany({ where: { playerId }, orderBy: { earnedAt: 'asc' } }),
+    ]);
+
+    const response: ApiSuccess<{
+      player: typeof player;
+      stats: {
+        huntsCompleted: number;
+        totalPoints: number;
+        totalCluesFound: number;
+        achievementsEarned: number;
+      };
+      earnedAchievements: Array<{ id: string; earnedAt: string; name?: string; description?: string; icon?: string }>;
+    }> = {
+      success: true,
+      data: {
+        player,
+        stats: {
+          huntsCompleted: completedSessions,
+          totalPoints: totalStats._sum.score ?? 0,
+          totalCluesFound: totalStats._sum.cluesFound ?? 0,
+          achievementsEarned: earnedAchievements.length,
+        },
+        earnedAchievements: earnedAchievements.map((a) => ({
+          id: a.achievementId,
+          earnedAt: a.earnedAt.toISOString(),
+          ...ACHIEVEMENTS.find((def) => def.id === a.achievementId),
+        })),
+      },
+    };
+    res.status(200).json(response);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /achievements — returns all achievement definitions annotated with earned status.
+router.get('/achievements', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const playerId = req.user!.id;
+
+    const earned = await prisma.playerAchievement.findMany({ where: { playerId } });
+    const earnedMap = new Map(earned.map((a) => [a.achievementId, a.earnedAt]));
+
+    const response: ApiSuccess<
+      Array<{ id: string; name: string; description: string; icon: string; earned: boolean; earnedAt: string | null }>
+    > = {
+      success: true,
+      data: ACHIEVEMENTS.map((def) => ({
+        ...def,
+        earned: earnedMap.has(def.id),
+        earnedAt: earnedMap.get(def.id)?.toISOString() ?? null,
+      })),
+    };
     res.status(200).json(response);
   } catch (err) {
     next(err);
