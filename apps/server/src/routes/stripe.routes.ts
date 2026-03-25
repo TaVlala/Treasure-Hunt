@@ -10,6 +10,7 @@ import { prisma } from '../config/database';
 import { authenticate } from '../middleware/authenticate';
 import { AppError } from '../middleware/errorHandler';
 import { env } from '../config/env';
+import { enqueueEmail } from '../queues/index';
 import type { ApiSuccess } from '@treasure-hunt/shared';
 
 const router = Router();
@@ -290,6 +291,35 @@ async function provisionHuntSession(
 }
 
 // ---------------------------------------------------------------------------
+// Email helper — enqueues a payment receipt email after a successful purchase
+// ---------------------------------------------------------------------------
+
+// Looks up the player's email + hunt title, then enqueues a receipt email job
+async function sendPaymentReceiptEmail(
+  huntId: string,
+  playerId: string,
+  paymentId: string,
+): Promise<void> {
+  const [hunt, player] = await Promise.all([
+    prisma.hunt.findUnique({ where: { id: huntId }, select: { title: true, ticketPriceCents: true, currency: true } }),
+    prisma.user.findUnique({ where: { id: playerId }, select: { email: true } }),
+  ]);
+
+  if (!hunt || !player?.email) return;
+
+  const amount = hunt.ticketPriceCents
+    ? `${(hunt.ticketPriceCents / 100).toFixed(2)} ${hunt.currency}`
+    : 'Free';
+
+  await enqueueEmail({
+    to: player.email,
+    subject: `Your ticket for ${hunt.title} is confirmed!`,
+    type: 'payment_receipt',
+    payload: { huntTitle: hunt.title, amount, paymentId },
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Webhook handler — exported and mounted with express.raw() in index.ts
 // ---------------------------------------------------------------------------
 
@@ -342,6 +372,12 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
         stripePaymentId,
         'Hunt ticket purchase via Stripe Checkout',
       );
+
+      // Enqueue payment receipt email (fire-and-forget)
+      void sendPaymentReceiptEmail(huntId, playerId, stripePaymentId).catch((err: unknown) =>
+        console.error('email enqueue error (checkout):', err),
+      );
+
       res.status(200).json({ received: true, sessionId });
       return;
     }
@@ -364,6 +400,12 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
         pi.id,
         'Hunt ticket purchase via native PaymentSheet',
       );
+
+      // Enqueue payment receipt email (fire-and-forget)
+      void sendPaymentReceiptEmail(huntId, playerId, pi.id).catch((err: unknown) =>
+        console.error('email enqueue error (payment_intent):', err),
+      );
+
       res.status(200).json({ received: true, sessionId });
       return;
     }

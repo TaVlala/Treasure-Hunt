@@ -34,8 +34,13 @@ const envSchema = z.object({
   // Public base URL of this server — used to build Stripe success/cancel redirect URLs
   APP_URL: z.string().url().optional(),
 
-  // Resend — optional until email is built
+  // Resend — optional; required for email notifications
   RESEND_API_KEY: z.string().optional(),
+  // "From" address used for all outgoing emails (defaults to noreply@treasurehunt.app)
+  RESEND_FROM_EMAIL: z.string().email().optional(),
+
+  // Redis — optional; required for BullMQ background job queues
+  REDIS_URL: z.string().optional(),
 
   // CORS — origins allowed to call the API
   ALLOWED_ORIGINS: z.string().default('http://localhost:3000,http://localhost:8081'),

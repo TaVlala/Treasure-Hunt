@@ -12,6 +12,13 @@ import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { authLimiter, gameLimiter, generalLimiter } from './middleware/rateLimiter';
 import { sanitiseInput } from './middleware/sanitise';
+import { createBullBoard } from '@bull-board/api';
+import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
+import { ExpressAdapter } from '@bull-board/express';
+import { getAnalyticsQueue, getEmailQueue, getCleanupQueue } from './queues/index';
+import { startAnalyticsWorker } from './workers/analytics.worker';
+import { startEmailWorker } from './workers/email.worker';
+import { startCleanupWorker } from './workers/cleanup.worker';
 
 import healthRouter from './routes/health.routes';
 import authRouter from './routes/auth.routes';
@@ -121,10 +128,49 @@ app.use('/api/v1/public', publicRouter);
 // Sponsor self-serve portal (requires SPONSOR JWT)
 app.use('/api/v1/sponsor', sponsorPortalRouter);
 
+// --- Bull Board job monitor ---
+
+// Mount Bull Board only if Redis is configured — admin-only job dashboard at /bull-board
+const analyticsQ = getAnalyticsQueue();
+const emailQ = getEmailQueue();
+const cleanupQ = getCleanupQueue();
+
+if (analyticsQ || emailQ || cleanupQ) {
+  const serverAdapter = new ExpressAdapter();
+  serverAdapter.setBasePath('/bull-board');
+
+  const queues = [analyticsQ, emailQ, cleanupQ]
+    .filter(Boolean)
+    .map((q) => new BullMQAdapter(q!));
+
+  createBullBoard({ queues, serverAdapter });
+
+  // Restrict Bull Board to admin JWT — simple header check
+  app.use('/bull-board', (req, res, next) => {
+    const token = req.headers['authorization']?.replace('Bearer ', '');
+    if (!token) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    next();
+  }, serverAdapter.getRouter());
+
+  console.log('✅ Bull Board mounted at /bull-board');
+}
+
 // --- Error handling ---
 
 // Must be registered AFTER all routes
 app.use(errorHandler);
+
+// --- Start workers ---
+
+// Workers are started after the HTTP server is listening.
+// They run in the same process (simple deployment) and share the Redis connection.
+const analyticsWorker = startAnalyticsWorker();
+const emailWorker = startEmailWorker();
+// Cleanup worker is async (schedules repeatable job) — fire-and-forget startup
+void startCleanupWorker();
 
 // --- Start server ---
 
@@ -139,6 +185,10 @@ const server = app.listen(env.PORT, () => {
 // Disconnect Prisma cleanly so DB connections are not left dangling
 const shutdown = async (signal: string) => {
   console.log(`\n${signal} received — shutting down gracefully...`);
+
+  // Close BullMQ workers first so in-flight jobs complete
+  await Promise.allSettled([analyticsWorker?.close(), emailWorker?.close()]);
+
   server.close(async () => {
     await prisma.$disconnect();
     console.log('   ✅ DB connection closed');

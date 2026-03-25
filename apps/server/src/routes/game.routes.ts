@@ -8,6 +8,7 @@ import { AppError } from '../middleware/errorHandler';
 import { authenticate } from '../middleware/authenticate';
 import { sendPushNotification } from '../services/push.service';
 import { evaluateAchievements } from '../lib/achievements';
+import { enqueueAnalytics } from '../queues/index';
 import {
   proximityCheckSchema,
   joinHuntSchema,
@@ -397,34 +398,34 @@ router.post(
         return [prog, sess];
       });
 
-      // Fire-and-forget analytics — records clue_found (always) and hunt_complete (if last clue)
-      void prisma.analyticsEvent
-        .create({
-          data: {
-            eventType: 'CLUE_FOUND',
-            huntId: session.huntId,
-            clueId: body.clueId,
-            playerId: session.playerId,
-            sessionId,
-          },
-        })
-        .catch((err: unknown) => console.error('analytics clue_found:', err));
+      // Enqueue analytics events via BullMQ (falls back to direct write if Redis unavailable)
+      void enqueueAnalytics({
+        eventType: 'CLUE_FOUND',
+        huntId: session.huntId,
+        clueId: body.clueId,
+        playerId: session.playerId,
+        sessionId,
+      }).catch((err: unknown) => {
+        // Fallback: direct write if queue is unavailable
+        void prisma.analyticsEvent
+          .create({ data: { eventType: 'CLUE_FOUND', huntId: session.huntId, clueId: body.clueId, playerId: session.playerId, sessionId } })
+          .catch((e: unknown) => console.error('analytics clue_found fallback:', e));
+        console.error('analytics queue error (clue_found):', err);
+      });
 
       if (isLastClue) {
-        void prisma.analyticsEvent
-          .create({
-            data: {
-              eventType: 'HUNT_COMPLETE',
-              huntId: session.huntId,
-              playerId: session.playerId,
-              sessionId,
-              metadata: {
-                score: updatedSession.score,
-                timeTakenSecs: updatedSession.timeTakenSecs,
-              },
-            },
-          })
-          .catch((err: unknown) => console.error('analytics hunt_complete:', err));
+        void enqueueAnalytics({
+          eventType: 'HUNT_COMPLETE',
+          huntId: session.huntId,
+          playerId: session.playerId,
+          sessionId,
+          metadata: { score: updatedSession.score, timeTakenSecs: updatedSession.timeTakenSecs },
+        }).catch((err: unknown) => {
+          void prisma.analyticsEvent
+            .create({ data: { eventType: 'HUNT_COMPLETE', huntId: session.huntId, playerId: session.playerId, sessionId, metadata: { score: updatedSession.score, timeTakenSecs: updatedSession.timeTakenSecs } } })
+            .catch((e: unknown) => console.error('analytics hunt_complete fallback:', e));
+          console.error('analytics queue error (hunt_complete):', err);
+        });
       }
 
       // Fire-and-forget push notification — does not block the response
