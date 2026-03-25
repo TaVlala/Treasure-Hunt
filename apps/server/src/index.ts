@@ -9,6 +9,9 @@ import { prisma } from './config/database';
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
+import { authLimiter, gameLimiter, generalLimiter } from './middleware/rateLimiter';
+import { sanitiseInput } from './middleware/sanitise';
 
 import healthRouter from './routes/health.routes';
 import authRouter from './routes/auth.routes';
@@ -32,6 +35,13 @@ const app = express();
 
 // --- Middleware ---
 
+// Security headers — sets X-Content-Type-Options, X-Frame-Options, HSTS, CSP, etc.
+// Registered first so every response gets security headers, including errors.
+app.use(helmet());
+
+// Broad rate limit applied to all API routes — catches scraping and runaway clients
+app.use('/api/v1', generalLimiter);
+
 // Stripe webhook requires the raw (unparsed) request body for signature verification.
 // Must be registered BEFORE express.json() which would consume and transform the body.
 app.post(
@@ -54,13 +64,16 @@ app.use(
   }),
 );
 
+// Sanitise all string inputs — strips XSS vectors before reaching route handlers
+app.use(sanitiseInput);
+
 // --- Routes ---
 
 // Health check — no auth required, used by Railway and monitoring
 app.use('/health', healthRouter);
 
-// Auth: register, login, refresh token, logout
-app.use('/api/v1/auth', authRouter);
+// Auth: register, login, refresh token, logout — strict rate limit (10/15min)
+app.use('/api/v1/auth', authLimiter, authRouter);
 
 // Hunt admin CRUD (requires admin JWT)
 app.use('/api/v1/admin/hunts', huntAdminRouter);
@@ -89,8 +102,8 @@ app.use('/api/v1/teams', teamRouter);
 // Stripe checkout + redirect pages (webhook is mounted above with raw body)
 app.use('/api/v1/stripe', stripeRouter);
 
-// Player game endpoints (proximity check, join hunt, submit answer, leaderboard)
-app.use('/api/v1/game', gameRouter);
+// Player game endpoints (proximity check, join hunt, submit answer, leaderboard) — moderate rate limit (60/min)
+app.use('/api/v1/game', gameLimiter, gameRouter);
 
 // Player discovery endpoints (list available hunts)
 app.use('/api/v1/player', playerRouter);
