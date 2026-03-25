@@ -106,8 +106,8 @@
 - [x] Revenue dashboard — /revenue page (total/ticket/sponsor revenue, monthly breakdown table, recent payments)
 - [x] Live hunt monitor — /live page with 10s polling, player cards, GPS, progress bars
 - [x] Player management page — /players with search, status toggle, session count
-- [ ] White-label settings per hunt
-- [ ] Sponsor report PDF export
+- [x] White-label settings per hunt — /hunts/:id/whitelabel page (brand name, logo, color picker); wizard step 5 included; mobile active screen applies whitelabelColor dynamically
+- [x] Sponsor report PDF export — GET /admin/analytics/sponsors/:id/report.pdf streams pdfkit PDF; ExportPdfButton on sponsor analytics page
 - [ ] Seasonal hunt templates
 
 ### Mobile Player App
@@ -121,7 +121,7 @@
 - [x] Prize redemption QR screen (tap-to-generate QR, white QR card, redeemed/expired status badges)
 - [x] Push notification handling (expo-notifications registered on login/restore, foreground handler configured)
 - [ ] Offline mode (cached clue content)
-- [ ] Hunt history + achievements
+- [x] Hunt history — /history tab shows completed sessions with scores and dates
 - [ ] Tourist mode ("I'm visiting [city]")
 - [ ] Social sharing
 

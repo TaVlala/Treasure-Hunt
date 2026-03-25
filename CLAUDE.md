@@ -35,7 +35,15 @@ hunt tickets, and tourism board contracts.
 - `hunts/new/page.tsx`: rewritten as 5-step wizard (Basics → Settings → Schedule+Map → Images → SEO+Whitelabel) with StepIndicator, per-step validation.
 - `Sidebar.tsx`: Players + Live Monitor nav items added.
 
-**Planned next chunk:** White-label settings per hunt, or: offline clue caching strategy, or: embeddable hotel widget.
+**Last completed chunk:** White-label branding + Sponsor PDF report + Mobile polish (parallel agents):
+- `hunts/[id]/whitelabel/` (admin): brand name, logo URL, color picker with live preview; PATCH /admin/hunts/:id persists all 3 fields; HuntHeader has White-label nav link; wizard step 5 includes fields.
+- Mobile active hunt screen: `whitelabelColor` applied as dynamic accent — score pill, progress bar, proximity ring, submit button, sponsor strip, hint card; outer expanding proximity ring + haptic feedback added.
+- `analytics.admin.routes.ts`: GET /admin/analytics/sponsors/:id/report.pdf streams pdfkit PDF with sponsor stats; `ExportPdfButton` on sponsor analytics page.
+- Mobile: hunt list rebuilt with cover images + badges; completion screen; history tab (/history) for completed sessions.
+- Admin: loading skeleton pages for hunts/players/revenue/sponsors routes; Breadcrumb component extracted.
+- TypeScript: 0 errors (ClueType import + Decimal.toNumber() in duplication; STEPS non-null assertions in wizard).
+
+**Planned next chunk:** Offline clue caching strategy, or: embeddable hotel widget, or: all clue types (image + photo challenge).
 
 **Known fix:** Express 5 `ParamsDictionary` types named params as `string | string[]` — always extract with `req.params['key'] as string` in route handlers.
 
