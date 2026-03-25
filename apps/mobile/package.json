@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@expo/metro-runtime": "~4.0.0",
+    "@react-native-async-storage/async-storage": "^2.1.0",
     "@rnmapbox/maps": "^10.2.10",
     "@stripe/stripe-react-native": "^0.40.0",
     "@treasure-hunt/shared": "*",

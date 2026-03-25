@@ -101,3 +101,10 @@ export interface ClueSponsor {
 export interface ClueWithSponsor extends Clue {
   sponsor: ClueSponsor | null;
 }
+
+// Full offline-cacheable bundle for a hunt — returned by GET /player/hunts/:huntId/bundle
+export interface HuntBundle {
+  hunt: HuntDetail & { clueCount: number };
+  clues: ClueWithSponsor[];
+  cachedAt: string;
+}

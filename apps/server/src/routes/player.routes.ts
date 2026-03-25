@@ -11,6 +11,7 @@ import type {
   ApiSuccess,
   Hunt,
   HuntDetail,
+  HuntBundle,
   Clue,
   ClueWithSponsor,
   ClueSponsor,
@@ -347,6 +348,96 @@ router.get('/hunts/:huntId/clues/:clueId', async (req: Request, res: Response, n
       success: true,
       data: { ...toClueResponse(clue as ClueRow), sponsor },
     };
+    res.status(200).json(response);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /hunts/:huntId/bundle — returns all clues for an ACTIVE hunt in a single payload.
+// Intended for the mobile app to cache for offline play. No answer field is exposed.
+// Returns { hunt, clues, cachedAt } matching the HuntBundle shared type.
+router.get('/hunts/:huntId/bundle', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const huntId = req.params['huntId'] as string;
+
+    // Fetch the hunt with clue count — must exist and be ACTIVE
+    const hunt = await prisma.hunt.findUnique({
+      where: { id: huntId },
+      include: { _count: { select: { clues: true } } },
+    });
+
+    if (!hunt) {
+      throw new AppError('Hunt not found', 404, 'NOT_FOUND');
+    }
+    if (hunt.status !== 'ACTIVE') {
+      throw new AppError('Hunt is not currently active', 404, 'NOT_FOUND');
+    }
+
+    // Fetch all clues ordered by orderIndex, including sponsor join data
+    const clueRows = await prisma.clue.findMany({
+      where: { huntId },
+      orderBy: { orderIndex: 'asc' },
+      select: {
+        id: true,
+        huntId: true,
+        orderIndex: true,
+        title: true,
+        description: true,
+        hintText: true,
+        clueType: true,
+        imageUrl: true,
+        latitude: true,
+        longitude: true,
+        proximityRadiusMeters: true,
+        isBonus: true,
+        points: true,
+        unlockMessage: true,
+        createdAt: true,
+        sponsorClue: {
+          select: {
+            brandedMessage: true,
+            offerText: true,
+            brandingColor: true,
+            callToAction: true,
+            sponsor: {
+              select: { businessName: true, logoUrl: true, websiteUrl: true },
+            },
+          },
+        },
+      },
+    });
+
+    // Map each clue row to the player-safe ClueWithSponsor shape
+    const clues: ClueWithSponsor[] = clueRows.map((c) => {
+      const sc = c.sponsorClue;
+      const sponsor: ClueSponsor | null = sc
+        ? {
+            businessName: sc.sponsor.businessName,
+            logoUrl: sc.sponsor.logoUrl,
+            websiteUrl: sc.sponsor.websiteUrl,
+            brandedMessage: sc.brandedMessage,
+            offerText: sc.offerText,
+            brandingColor: sc.brandingColor,
+            callToAction: sc.callToAction,
+          }
+        : null;
+
+      return { ...toClueResponse(c as ClueRow), sponsor };
+    });
+
+    const huntDetail: HuntDetail & { clueCount: number } = {
+      ...toHuntResponse(hunt),
+      clueCount: hunt._count.clues,
+    };
+
+    const data: HuntBundle = {
+      hunt: huntDetail,
+      clues,
+      cachedAt: new Date().toISOString(),
+    };
+
+    const response: ApiSuccess<HuntBundle> = { success: true, data };
     res.status(200).json(response);
   } catch (err) {
     next(err);

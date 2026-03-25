@@ -21,9 +21,11 @@ import * as Location from 'expo-location';
 import * as Haptics from 'expo-haptics';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { playerFetch } from '@/lib/api';
+import { loadBundle, saveBundle } from '@/lib/huntCache';
 import type {
   ClueWithSponsor,
   Hunt,
+  HuntBundle,
   SessionWithProgress,
   SubmitClueResult,
 } from '@treasure-hunt/shared';
@@ -189,6 +191,18 @@ export default function ActiveHuntScreen() {
   const [distanceMeters, setDistanceMeters] = useState<number | null>(null);
   const locationSub = useRef<Location.LocationSubscription | null>(null);
 
+  // Offline bundle cache — populated on mount from AsyncStorage or network
+  const bundleClues = useRef<ClueWithSponsor[]>([]);
+
+  // ---------------------------------------------------------------------------
+  // Bundle helper — finds a clue from the in-memory bundle ref by id
+  // ---------------------------------------------------------------------------
+  const getClueFromBundle = useCallback(
+    (clueId: string): ClueWithSponsor | undefined =>
+      bundleClues.current.find((c) => c.id === clueId),
+    [],
+  );
+
   // ---------------------------------------------------------------------------
   // Load session + current clue on mount
   // ---------------------------------------------------------------------------
@@ -203,11 +217,28 @@ export default function ActiveHuntScreen() {
         setSession(data);
         setHunt(huntData);
 
+        // Hydrate offline bundle cache — try AsyncStorage first, then network
+        const cached = await loadBundle(huntId);
+        if (cached) {
+          bundleClues.current = cached;
+        } else {
+          const bundle = await playerFetch<HuntBundle>(
+            `/api/v1/player/hunts/${huntId}/bundle`,
+          ).catch(() => null);
+          if (bundle) {
+            bundleClues.current = bundle.clues;
+            await saveBundle(huntId, bundle.clues);
+          }
+        }
+
         const unlockedProgress = data.progress.find((p) => p.status === 'unlocked');
         if (unlockedProgress) {
-          const clue = await playerFetch<ClueWithSponsor>(
-            `/api/v1/player/hunts/${huntId}/clues/${unlockedProgress.clueId}`,
-          ).catch(() => null);
+          // Use bundle clue when available; fall back to individual network fetch
+          const bundledClue = getClueFromBundle(unlockedProgress.clueId);
+          const clue = bundledClue
+            ?? await playerFetch<ClueWithSponsor>(
+                `/api/v1/player/hunts/${huntId}/clues/${unlockedProgress.clueId}`,
+              ).catch(() => null);
           setCurrentClue(clue);
           // Restore hint if already used before (e.g. app reopen mid-hunt)
           if (unlockedProgress.hintUsed && clue?.hintText) {
@@ -221,7 +252,7 @@ export default function ActiveHuntScreen() {
         setIsLoading(false);
       }
     })();
-  }, [sessionId, huntId]);
+  }, [sessionId, huntId, getClueFromBundle]);
 
   // ---------------------------------------------------------------------------
   // GPS permission + tracking
@@ -281,11 +312,12 @@ export default function ActiveHuntScreen() {
         return;
       }
 
-      // Load full clue data (with sponsor) for the next clue
+      // Load full clue data (with sponsor) for the next clue — bundle-first
       const nextClue = result.nextClue
-        ? await playerFetch<ClueWithSponsor>(
-            `/api/v1/player/hunts/${huntId}/clues/${result.nextClue.id}`,
-          ).catch(() => ({ ...result.nextClue!, sponsor: null }) as ClueWithSponsor)
+        ? (getClueFromBundle(result.nextClue.id) ??
+            await playerFetch<ClueWithSponsor>(
+              `/api/v1/player/hunts/${huntId}/clues/${result.nextClue.id}`,
+            ).catch(() => ({ ...result.nextClue!, sponsor: null }) as ClueWithSponsor))
         : null;
 
       setSession(result.session);
@@ -296,7 +328,7 @@ export default function ActiveHuntScreen() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [currentClue, session, sessionId, huntId, router]);
+  }, [currentClue, session, sessionId, huntId, router, getClueFromBundle]);
 
   // ---------------------------------------------------------------------------
   // Hint reveal
