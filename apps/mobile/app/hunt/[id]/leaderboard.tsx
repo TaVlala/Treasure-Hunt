@@ -11,11 +11,28 @@ import {
   SafeAreaView,
   ActivityIndicator,
   RefreshControl,
+  Modal,
+  Pressable,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState, useEffect, useCallback } from 'react';
 import { playerFetch } from '@/lib/api';
 import type { LeaderboardEntry } from '@treasure-hunt/shared';
+
+// ---------------------------------------------------------------------------
+// Local type — will be replaced by shared import in a future cleanup
+// ---------------------------------------------------------------------------
+type PublicPlayerProfile = {
+  id: string;
+  displayName: string;
+  stats: {
+    huntsCompleted: number;
+    totalPoints: number;
+    totalCluesFound: number;
+    achievementsEarned: number;
+  };
+  topAchievements: Array<{ id: string; name: string; icon: string }>;
+};
 
 // ---------------------------------------------------------------------------
 // Design tokens
@@ -55,12 +72,19 @@ function rankBadge(rank: number): string {
 function LeaderboardRow({
   entry,
   isCurrentPlayer,
+  onPress,
 }: {
   entry: LeaderboardEntry;
   isCurrentPlayer: boolean;
+  onPress?: () => void;
 }) {
   return (
-    <View style={[styles.row, isCurrentPlayer && styles.rowHighlight]}>
+    <TouchableOpacity
+      style={[styles.row, isCurrentPlayer && styles.rowHighlight]}
+      onPress={onPress}
+      disabled={isCurrentPlayer || !onPress}
+      activeOpacity={0.75}
+    >
       <Text style={[styles.rankText, entry.rank <= 3 && styles.rankMedal]}>
         {rankBadge(entry.rank)}
       </Text>
@@ -83,7 +107,7 @@ function LeaderboardRow({
           <Text style={styles.timeValue}>{fmtTime(entry.timeTakenSecs)}</Text>
         )}
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -103,6 +127,13 @@ export default function LeaderboardScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Profile modal state
+  const [profileModal, setProfileModal] = useState<{
+    profile: PublicPlayerProfile;
+    isRival: boolean; // true if this player is ranked above current player
+  } | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
 
   // Fetch leaderboard entries
   const load = useCallback(async (refresh = false) => {
@@ -125,6 +156,23 @@ export default function LeaderboardScreen() {
 
   // Find the current player's rank for the sticky banner
   const myEntry = entries.find((e) => e.playerId === playerId);
+
+  // Opens the public profile bottom-sheet for a tapped row (skips own row)
+  const onRowPress = useCallback(async (entry: LeaderboardEntry) => {
+    if (entry.playerId === playerId) return; // don't open modal for yourself
+    setProfileLoading(true);
+    try {
+      const profile = await playerFetch<PublicPlayerProfile>(
+        `/api/v1/player/players/${entry.playerId}/public`,
+      );
+      const myRank = myEntry?.rank ?? Infinity;
+      setProfileModal({ profile, isRival: entry.rank < myRank });
+    } catch {
+      // silently ignore — row press is non-critical
+    } finally {
+      setProfileLoading(false);
+    }
+  }, [playerId, myEntry]);
 
   // ---------------------------------------------------------------------------
   // Render states
@@ -180,6 +228,13 @@ export default function LeaderboardScreen() {
         <View style={styles.headerSpacer} />
       </View>
 
+      {/* Profile loading indicator */}
+      {profileLoading && (
+        <View style={styles.profileLoadingBar}>
+          <ActivityIndicator color={ACCENT} size="small" />
+        </View>
+      )}
+
       {/* Current player sticky banner */}
       {myEntry && (
         <View style={styles.myRankBanner}>
@@ -201,7 +256,11 @@ export default function LeaderboardScreen() {
         data={entries}
         keyExtractor={(item) => item.playerId}
         renderItem={({ item }) => (
-          <LeaderboardRow entry={item} isCurrentPlayer={item.playerId === playerId} />
+          <LeaderboardRow
+            entry={item}
+            isCurrentPlayer={item.playerId === playerId}
+            onPress={() => void onRowPress(item)}
+          />
         )}
         refreshControl={
           <RefreshControl refreshing={isRefreshing} onRefresh={() => void load(true)} tintColor={ACCENT} />
@@ -215,6 +274,71 @@ export default function LeaderboardScreen() {
         }
         contentContainerStyle={entries.length === 0 ? styles.emptyList : undefined}
       />
+
+      {/* Public profile bottom sheet */}
+      <Modal
+        visible={profileModal !== null}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setProfileModal(null)}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setProfileModal(null)}>
+          <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
+            {profileModal && (
+              <>
+                {/* Handle */}
+                <View style={styles.modalHandle} />
+
+                {/* Header */}
+                <View style={styles.modalHeader}>
+                  <View>
+                    <Text style={styles.modalName}>{profileModal.profile.displayName}</Text>
+                    {profileModal.isRival && (
+                      <View style={styles.rivalBadge}>
+                        <Text style={styles.rivalText}>⚔️ RIVAL</Text>
+                      </View>
+                    )}
+                  </View>
+                  <TouchableOpacity onPress={() => setProfileModal(null)} style={styles.modalCloseBtn}>
+                    <Text style={styles.modalCloseText}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Stats grid */}
+                <View style={styles.modalStats}>
+                  {([
+                    { label: 'Hunts', value: profileModal.profile.stats.huntsCompleted, icon: '🗺️' },
+                    { label: 'Clues', value: profileModal.profile.stats.totalCluesFound, icon: '🔍' },
+                    { label: 'Points', value: profileModal.profile.stats.totalPoints, icon: '💎' },
+                    { label: 'Badges', value: profileModal.profile.stats.achievementsEarned, icon: '🏆' },
+                  ] as const).map(({ label, value, icon }) => (
+                    <View key={label} style={styles.modalStat}>
+                      <Text style={styles.modalStatIcon}>{icon}</Text>
+                      <Text style={styles.modalStatValue}>{value}</Text>
+                      <Text style={styles.modalStatLabel}>{label}</Text>
+                    </View>
+                  ))}
+                </View>
+
+                {/* Top achievements */}
+                {profileModal.profile.topAchievements.length > 0 && (
+                  <View style={styles.modalAchievements}>
+                    <Text style={styles.modalAchievementsLabel}>TOP ACHIEVEMENTS</Text>
+                    <View style={styles.modalAchievementsRow}>
+                      {profileModal.profile.topAchievements.map((a) => (
+                        <View key={a.id} style={styles.modalAchievementBadge}>
+                          <Text style={styles.modalAchievementIcon}>{a.icon}</Text>
+                          <Text style={styles.modalAchievementName} numberOfLines={1}>{a.name}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                )}
+              </>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -231,6 +355,13 @@ const styles = StyleSheet.create({
   backText: { color: MUTED, fontSize: 12, fontWeight: '600' },
   title: { flex: 1, color: TEXT, fontSize: 18, fontWeight: '800', letterSpacing: -0.4, textAlign: 'center' },
   headerSpacer: { width: 60 }, // balances back button
+
+  profileLoadingBar: {
+    alignItems: 'center',
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER,
+  },
 
   myRankBanner: {
     flexDirection: 'row',
@@ -288,4 +419,53 @@ const styles = StyleSheet.create({
   stateBody: { color: MUTED, fontSize: 14, textAlign: 'center', lineHeight: 20, marginBottom: 24 },
   retryBtn: { backgroundColor: ACCENT, borderRadius: 10, paddingHorizontal: 24, paddingVertical: 12 },
   retryText: { color: '#000', fontWeight: '700', fontSize: 14 },
+
+  // Modal
+  modalBackdrop: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: '#141414', borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    borderWidth: 1, borderColor: '#242424', paddingBottom: 32,
+  },
+  modalHandle: {
+    width: 36, height: 4, backgroundColor: '#333', borderRadius: 2,
+    alignSelf: 'center', marginTop: 12, marginBottom: 4,
+  },
+  modalHeader: {
+    flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingVertical: 16,
+  },
+  modalName: { color: '#ffffff', fontSize: 20, fontWeight: '800', letterSpacing: -0.4 },
+  rivalBadge: {
+    marginTop: 4, alignSelf: 'flex-start',
+    backgroundColor: '#ef444422', borderRadius: 6, paddingHorizontal: 8,
+    paddingVertical: 3, borderWidth: 1, borderColor: '#ef444444',
+  },
+  rivalText: { color: '#ef4444', fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
+  modalCloseBtn: {
+    width: 32, height: 32, borderRadius: 16, backgroundColor: '#1c1c1c',
+    borderWidth: 1, borderColor: '#242424', alignItems: 'center', justifyContent: 'center',
+  },
+  modalCloseText: { color: '#888', fontSize: 14, fontWeight: '700' },
+  modalStats: {
+    flexDirection: 'row', paddingHorizontal: 16, gap: 8, marginBottom: 20,
+  },
+  modalStat: {
+    flex: 1, backgroundColor: '#1c1c1c', borderRadius: 10, borderWidth: 1,
+    borderColor: '#242424', padding: 12, alignItems: 'center', gap: 4,
+  },
+  modalStatIcon: { fontSize: 18 },
+  modalStatValue: { color: '#ffffff', fontSize: 18, fontWeight: '800', letterSpacing: -0.5 },
+  modalStatLabel: { color: '#888', fontSize: 9, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  modalAchievements: { paddingHorizontal: 20, gap: 12 },
+  modalAchievementsLabel: { color: '#888', fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  modalAchievementsRow: { flexDirection: 'row', gap: 10 },
+  modalAchievementBadge: {
+    flex: 1, backgroundColor: '#1c1c1c', borderRadius: 10, borderWidth: 1,
+    borderColor: '#f59e0b55', padding: 12, alignItems: 'center', gap: 6,
+  },
+  modalAchievementIcon: { fontSize: 24 },
+  modalAchievementName: { color: '#ffffff', fontSize: 11, fontWeight: '600', textAlign: 'center' },
 });

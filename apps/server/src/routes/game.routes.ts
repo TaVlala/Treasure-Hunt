@@ -456,6 +456,17 @@ router.post(
       // Evaluate achievements after the transaction so the session status is committed
       const newAchievements = await evaluateAchievements(prisma, session.playerId, sessionId);
 
+      // Fire push notifications for each newly earned achievement (fire-and-forget)
+      if (newAchievements.length > 0 && pushToken) {
+        for (const achievement of newAchievements) {
+          void sendPushNotification(
+            pushToken,
+            '🏆 Achievement Unlocked!',
+            `${achievement.icon} ${achievement.name} — ${achievement.description}`,
+          );
+        }
+      }
+
       const response: ApiSuccess<SubmitClueResult> = {
         success: true,
         message: isLastClue ? 'Hunt complete!' : 'Clue found!',

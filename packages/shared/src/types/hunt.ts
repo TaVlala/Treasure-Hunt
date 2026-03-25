@@ -134,3 +134,16 @@ export type PlayerProfile = {
   };
   earnedAchievements: (AchievementDef & { earnedAt: string })[];
 };
+
+// Public player profile — returned by GET /players/:playerId/public (leaderboard rival view)
+export type PublicPlayerProfile = {
+  id: string;
+  displayName: string;
+  stats: {
+    huntsCompleted: number;
+    totalPoints: number;
+    totalCluesFound: number;
+    achievementsEarned: number;
+  };
+  topAchievements: Array<{ id: string; name: string; icon: string }>;
+};

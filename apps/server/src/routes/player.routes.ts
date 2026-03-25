@@ -8,6 +8,7 @@ import { prisma } from '../config/database';
 import { authenticate } from '../middleware/authenticate';
 import { AppError } from '../middleware/errorHandler';
 import { ACHIEVEMENTS } from '../lib/achievements';
+import type { AchievementDef } from '../lib/achievements';
 import type {
   ApiSuccess,
   Hunt,
@@ -26,6 +27,7 @@ import type {
   PrizeType,
   Redemption,
   RedemptionStatus,
+  PublicPlayerProfile,
 } from '@treasure-hunt/shared';
 
 const router = Router();
@@ -767,6 +769,60 @@ router.get('/achievements', async (req: Request, res: Response, next: NextFuncti
     res.status(200).json(response);
   } catch (err) {
     next(err);
+  }
+});
+
+// GET /players/:playerId/public — returns public stats for any player.
+// Used by leaderboard to show rival profiles. No private data exposed.
+router.get('/players/:playerId/public', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const playerId = req.params['playerId'] as string;
+
+    const [player, completedSessions, totalStats, achievementsCount, topAchievements] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: playerId },
+        select: { id: true, displayName: true, createdAt: true },
+      }),
+      prisma.gameSession.count({ where: { playerId, status: 'COMPLETED' } }),
+      prisma.gameSession.aggregate({
+        where: { playerId },
+        _sum: { score: true, cluesFound: true },
+      }),
+      prisma.playerAchievement.count({ where: { playerId } }),
+      prisma.playerAchievement.findMany({
+        where: { playerId },
+        orderBy: { earnedAt: 'asc' },
+        take: 3,
+      }),
+    ]);
+
+    if (!player) {
+      throw new AppError('Player not found', 404, 'NOT_FOUND');
+    }
+
+    // Build top-3 achievement icon list from definitions
+    const topIcons = topAchievements
+      .map((a) => ACHIEVEMENTS.find((def) => def.id === a.achievementId))
+      .filter((def): def is AchievementDef => def !== undefined)
+      .map((def) => ({ id: def.id, name: def.name, icon: def.icon }));
+
+    const response: ApiSuccess<PublicPlayerProfile> = {
+      success: true,
+      data: {
+        id: player.id,
+        displayName: player.displayName,
+        stats: {
+          huntsCompleted: completedSessions,
+          totalPoints: totalStats._sum.score ?? 0,
+          totalCluesFound: totalStats._sum.cluesFound ?? 0,
+          achievementsEarned: achievementsCount,
+        },
+        topAchievements: topIcons,
+      },
+    };
+    res.json(response);
+  } catch (e) {
+    next(e);
   }
 });
 
