@@ -43,7 +43,13 @@ hunt tickets, and tourism board contracts.
 - Admin: loading skeleton pages for hunts/players/revenue/sponsors routes; Breadcrumb component extracted.
 - TypeScript: 0 errors (ClueType import + Decimal.toNumber() in duplication; STEPS non-null assertions in wizard).
 
-**Last completed chunk (Phase 3 Track A — chunk 1):** Sponsor self-serve portal:
+**Last completed chunk (Phase 3 Track C — chunk 1):** Security & rate limiting:
+- `middleware/rateLimiter.ts`: `authLimiter` (10/15min), `gameLimiter` (60/min), `generalLimiter` (200/min) via `express-rate-limit`
+- `middleware/sanitise.ts`: strips `<script>` tags, HTML tags, null bytes from `req.body`/`query`/`params`
+- `index.ts`: `helmet()` first (security headers), rate limiters on `/api/v1`, `/api/v1/auth`, `/api/v1/game`, sanitise middleware after JSON parse
+- TypeScript: 0 errors. Branch: `feature/phase3-sponsor-portal`
+
+**Previous completed chunk (Phase 3 Track A — chunk 1):** Sponsor self-serve portal:
 - `schema.prisma`: `SPONSOR` in `UserRole`; `Sponsor.userId` FK (⚠️ needs `prisma migrate dev --name add_sponsor_user_link`)
 - `auth.routes.ts`: `POST /auth/sponsor/register` + `POST /auth/sponsor/login`
 - `sponsor.portal.routes.ts`: `GET /sponsor/me`, `/clues`, `/analytics` (SPONSOR role gated)

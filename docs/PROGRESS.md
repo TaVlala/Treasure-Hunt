@@ -141,7 +141,7 @@
 - [ ] Automated invoice generation
 - [ ] Multi-city tenant support
 - [ ] Advanced analytics (cohorts, retention)
-- [ ] Rate limiting and abuse protection
+- [x] Rate limiting and abuse protection — helmet security headers, express-rate-limit (auth 10/15min, game 60/min, general 200/min), XSS sanitisation middleware
 - [ ] API versioning
 - [ ] Background job queue (bull/bullmq)
 
