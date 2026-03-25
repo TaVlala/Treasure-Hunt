@@ -95,6 +95,7 @@ function toHuntResponse(hunt: HuntRow): Hunt {
 // Routes
 // ---------------------------------------------------------------------------
 
+// CORS: this route allows any origin (see index.ts embed CORS) — never expose private fields here.
 // GET /hunts — list ACTIVE hunts with optional city filter and pagination.
 // Public: no auth required.
 router.get('/hunts', async (req: Request, res: Response, next: NextFunction) => {

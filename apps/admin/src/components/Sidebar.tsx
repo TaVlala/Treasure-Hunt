@@ -65,6 +65,18 @@ const NAV_ITEMS = [
     ),
   },
   {
+    label: 'Embed Widget',
+    href: '/embed-code',
+    icon: (
+      <svg width="16" height="16" fill="none" viewBox="0 0 16 16">
+        <rect x="1" y="3" width="14" height="10" rx="2" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M5 6L3 8l2 2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M11 6l2 2-2 2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M9 6l-2 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+  {
     label: 'Players',
     href: '/players',
     icon: (

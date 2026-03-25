@@ -97,6 +97,10 @@ app.use('/api/v1/player', playerRouter);
 // File upload — generates presigned R2 PUT URLs for direct client uploads
 app.use('/api/v1/upload', uploadRouter);
 
+// Public API routes allow any origin so hotel/partner websites can embed the widget.
+// No credentials: true here — these endpoints require no auth.
+app.use('/api/v1/public', cors({ origin: '*' }));
+
 // Public hunt discovery — no auth required, used by landing pages and SEO
 app.use('/api/v1/public', publicRouter);
 
