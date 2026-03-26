@@ -64,8 +64,9 @@ hunt tickets, and tourism board contracts.
 - SDK v20 compat: period dates from `sub.start_date` (not `current_period_start`); sub ID from `invoice.parent.subscription_details.subscription`
 - `sponsor.portal.routes.ts`: `GET /sponsor/subscription` — status, period, hasBillingAccount
 - `packages/shared/src/types/sponsor.ts`: `SubscriptionStatus` + `Subscription` types
+- **Chunk 2**: sponsor/dashboard billing section (subscribe/manage buttons, status badge, next billing date, cancelAtPeriodEnd warning); admin `sponsors/[id]` subscription badge; `sponsor.admin.routes.ts` GET /:id returns subscription
 - TypeScript: 0 errors. Branch: `feature/phase3-sponsor-portal`
-- **Chunk 2 pending**: Admin billing UI (sponsor subscription status card, subscribe/portal buttons)
+- **Stripe Billing COMPLETE ✅**
 
 **Previous completed chunk (Phase 3 Track C — chunk 2):** Background jobs (BullMQ):
 - `config/redis.ts`: lazy ioredis connection; graceful close; no-op when `REDIS_URL` absent

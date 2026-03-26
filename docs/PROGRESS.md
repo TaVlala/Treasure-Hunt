@@ -137,7 +137,8 @@
 ## Phase 3 — Scale & Revenue
 
 ### Backend
-- [ ] Stripe Billing for recurring sponsor fees
+- [x] Stripe Billing for recurring sponsor fees — Checkout Session (subscription mode), Billing Portal, webhook lifecycle (created/updated/deleted/invoice.paid/payment_failed), Payment record on invoice.paid, email on failure; GET /sponsor/subscription endpoint
+- [x] Stripe Billing admin UI — sponsor dashboard billing section (subscribe/manage buttons, status badge, next billing date, cancelAtPeriodEnd warning); admin sponsor detail subscription badge
 - [ ] Automated invoice generation
 - [ ] Multi-city tenant support
 - [ ] Advanced analytics (cohorts, retention)
