@@ -12,9 +12,9 @@ Sponsors pay to place branded clues at their locations. Players explore the city
 clues, and redeem prizes at sponsor businesses. Revenue comes from sponsor fees, paid
 hunt tickets, and tourism board contracts.
 
-## Current Phase: Phase 2 — First Live Public Hunt
+## Current Phase: Phase 3 — Scale & Revenue
 
-**Status:** Phase 1 fully complete and merged to main. Starting Phase 2: prizes, Stripe tickets, push notifications, team play, public landing pages.
+**Status:** Phases 1 + 2 + Phase 3 Tracks A/B/C all merged to main. Current branch: `main`.
 
 **Last completed chunk:** Analytics + Team Play + Admin Prize Manager (parallel agents):
 - `analytics.admin.routes.ts`: GET /admin/analytics (overall event stats), GET /admin/analytics/hunts/:huntId (funnel). `game.routes.ts`: fire-and-forget CLUE_FOUND + HUNT_COMPLETE analytics events recorded in submit handler.
