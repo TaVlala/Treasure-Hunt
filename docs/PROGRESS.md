@@ -144,6 +144,7 @@
 - [x] Rate limiting and abuse protection — helmet security headers, express-rate-limit (auth 10/15min, game 60/min, general 200/min), XSS sanitisation middleware
 - [ ] API versioning
 - [x] Background job queue (BullMQ) — analyticsQueue + emailQueue + cleanupQueue; analytics.worker (off request thread), email.worker (Resend, retry x3), cleanup.worker (nightly 02:00 UTC purge); Bull Board at /bull-board
+- [x] Observability — pino structured logging (JSON prod / pretty dev), request ID middleware (X-Request-Id), @sentry/node v10 (gated on SENTRY_DSN), extended /health (DB ping, Redis ping, uptime, memory RSS)
 
 ### Admin Panel
 - [ ] Multi-city management
@@ -153,7 +154,7 @@
 - [ ] Bulk hunt management
 
 ### Mobile App
-- [ ] App Store submission (iOS + Android)
+- [x] App Store submission prep — eas.json (dev/preview/production profiles), app.json (full metadata + permissions + runtimeVersion), STORE_LISTING.md (ready-to-paste copy + submission checklist)
 - [x] Achievements + badges system — 8 achievements, evaluateAchievements() in submit handler, GET /profile + /achievements endpoints, Profile tab with badge grid, animated toast in active screen
 - [x] Social features — tappable leaderboard profiles (public stats + rival badge + top achievements modal), achievement push notifications
 - [ ] AR clue mode (camera-based clues)

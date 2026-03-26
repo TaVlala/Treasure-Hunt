@@ -43,7 +43,21 @@ hunt tickets, and tourism board contracts.
 - Admin: loading skeleton pages for hunts/players/revenue/sponsors routes; Breadcrumb component extracted.
 - TypeScript: 0 errors (ClueType import + Decimal.toNumber() in duplication; STEPS non-null assertions in wizard).
 
-**Last completed chunk (Phase 3 Track C — chunk 2):** Background jobs (BullMQ):
+**Last completed chunks (Phase 3 Track C — chunks 3+4):** App Store prep + Observability:
+- `apps/mobile/eas.json`: EAS build profiles — development (simulator), preview (internal APK), production (AAB + autoIncrement)
+- `apps/mobile/app.json`: full metadata — icon/splash, runtimeVersion policy, owner, iOS infoPlist (all permission strings + UIBackgroundModes), Android permissions list, versionCode, EAS projectId placeholder, OTA updates config
+- `STORE_LISTING.md` (root): ready-to-paste App Store + Play Store copy, screenshot captions, submission checklist, EAS commands
+- `lib/logger.ts`: pino structured logger — JSON in prod, pino-pretty in dev; redacts auth headers + passwords
+- `middleware/requestId.ts`: stamps every request with `crypto.randomUUID()`; echoes `X-Request-Id` header
+- `lib/sentry.ts`: @sentry/node v10 — `initSentry()` + `setupSentryErrorHandler()` + `sentryErrorHandler`; no-op when `SENTRY_DSN` absent
+- `config/env.ts`: `SENTRY_DSN` (optional URL) + `SENTRY_TRACES_SAMPLE_RATE` (default 0.1) added
+- `index.ts`: requestId → pinoHttp → Sentry init → routes → setupSentryErrorHandler; all `console.log` replaced with `logger`
+- `routes/health.routes.ts`: extended — DB ping, Redis ping, uptimeSeconds, memoryMb; HTTP 503 when DB unavailable
+- TypeScript: 0 errors. Branch: `feature/phase3-sponsor-portal`
+
+**Phase 3 Track C is now COMPLETE.**
+
+**Previous completed chunk (Phase 3 Track C — chunk 2):** Background jobs (BullMQ):
 - `config/redis.ts`: lazy ioredis connection; graceful close; no-op when `REDIS_URL` absent
 - `queues/index.ts`: `analyticsQueue` / `emailQueue` / `cleanupQueue`; typed payloads; `enqueueAnalytics()` + `enqueueEmail()` helpers with DB/silent fallback
 - `workers/analytics.worker.ts`: CLUE_FOUND + HUNT_COMPLETE off request thread (concurrency 5)
