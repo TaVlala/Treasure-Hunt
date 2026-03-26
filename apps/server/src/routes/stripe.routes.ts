@@ -1,16 +1,19 @@
-// Stripe payment routes — ticket checkout + native PaymentSheet + webhook + redirect pages.
-// Checkout:     POST /api/v1/stripe/checkout/:huntId      (browser Checkout Session — legacy)
-// PaymentSheet: POST /api/v1/stripe/payment-sheet/:huntId (native Apple Pay / Google Pay)
-// Webhook:      POST /api/v1/stripe/webhook               (raw body, mounted in index.ts)
-// Pages:        GET  /api/v1/stripe/success|cancel        (HTML redirect targets for browser flow)
+// Stripe payment routes — ticket checkout + native PaymentSheet + sponsor billing + webhook + redirect pages.
+// Checkout:         POST /api/v1/stripe/checkout/:huntId         (browser Checkout Session)
+// PaymentSheet:     POST /api/v1/stripe/payment-sheet/:huntId    (native Apple Pay / Google Pay)
+// Sponsor billing:  POST /api/v1/stripe/sponsor/subscribe        (subscription Checkout Session)
+// Billing portal:   GET  /api/v1/stripe/sponsor/billing-portal   (Stripe Billing Portal URL)
+// Webhook:          POST /api/v1/stripe/webhook                   (raw body, mounted in index.ts)
+// Pages:            GET  /api/v1/stripe/success|cancel            (HTML redirect targets)
 
 import { Router, Request, Response, NextFunction } from 'express';
 import Stripe from 'stripe';
 import { prisma } from '../config/database';
-import { authenticate } from '../middleware/authenticate';
+import { authenticate, requireRole } from '../middleware/authenticate';
 import { AppError } from '../middleware/errorHandler';
 import { env } from '../config/env';
 import { enqueueEmail } from '../queues/index';
+import { logger } from '../lib/logger';
 import type { ApiSuccess } from '@treasure-hunt/shared';
 
 const router = Router();
@@ -320,6 +323,148 @@ async function sendPaymentReceiptEmail(
 }
 
 // ---------------------------------------------------------------------------
+// Sponsor Billing — Stripe Subscriptions for recurring platform fees
+// ---------------------------------------------------------------------------
+
+// POST /stripe/sponsor/subscribe — create a Stripe Checkout Session in subscription mode.
+// Redirects the sponsor to Stripe-hosted checkout to enter card details.
+// On success, the checkout.session.completed webhook provisions the Subscription record.
+router.post(
+  '/sponsor/subscribe',
+  authenticate,
+  requireRole('sponsor'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const stripe = getStripe();
+      const userId = req.user!.id;
+      const baseUrl = env.APP_URL ?? `http://localhost:${env.PORT}`;
+      const returnUrl =
+        env.STRIPE_BILLING_PORTAL_RETURN_URL ?? `${baseUrl}/sponsor/dashboard`;
+
+      // Look up sponsor by linked user account
+      const sponsor = await prisma.sponsor.findUnique({
+        where: { userId },
+        select: {
+          id: true,
+          businessName: true,
+          contactEmail: true,
+          monthlyFeeCents: true,
+          stripeCustomerId: true,
+          subscription: { select: { status: true } },
+        },
+      });
+
+      if (!sponsor) throw new AppError('Sponsor account not found', 404, 'NOT_FOUND');
+      if (!sponsor.monthlyFeeCents) {
+        throw new AppError(
+          'No monthly fee is configured for your account — contact support.',
+          400,
+          'BAD_REQUEST',
+        );
+      }
+      if (sponsor.subscription?.status === 'ACTIVE') {
+        throw new AppError('You already have an active subscription.', 409, 'CONFLICT');
+      }
+
+      // Create Stripe Customer on first subscribe; reuse on retry
+      let stripeCustomerId = sponsor.stripeCustomerId;
+      if (!stripeCustomerId) {
+        const customer = await stripe.customers.create({
+          name: sponsor.businessName,
+          email: sponsor.contactEmail ?? undefined,
+          metadata: { sponsorId: sponsor.id },
+        });
+        stripeCustomerId = customer.id;
+        await prisma.sponsor.update({
+          where: { id: sponsor.id },
+          data: { stripeCustomerId: customer.id },
+        });
+      }
+
+      // Checkout Session in subscription mode — price_data avoids requiring a pre-created Price
+      const session = await stripe.checkout.sessions.create({
+        customer: stripeCustomerId,
+        payment_method_types: ['card'],
+        mode: 'subscription',
+        line_items: [
+          {
+            quantity: 1,
+            price_data: {
+              currency: 'usd',
+              recurring: { interval: 'month' },
+              unit_amount: sponsor.monthlyFeeCents,
+              product_data: {
+                name: 'Treasure Hunt Sponsor Platform Fee',
+                description: `Monthly sponsor fee for ${sponsor.businessName}`,
+              },
+            },
+          },
+        ],
+        // Store sponsorId so the webhook can link the Subscription record
+        metadata: { sponsorId: sponsor.id },
+        subscription_data: { metadata: { sponsorId: sponsor.id } },
+        success_url: `${returnUrl}?billing=success`,
+        cancel_url: `${returnUrl}?billing=cancelled`,
+      });
+
+      const response: ApiSuccess<{ checkoutUrl: string }> = {
+        success: true,
+        data: { checkoutUrl: session.url! },
+      };
+      res.status(200).json(response);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// GET /stripe/sponsor/billing-portal — return a Stripe Billing Portal session URL.
+// Sponsor clicks "Manage Billing" in the portal → opens Stripe's hosted portal
+// to update their card, view invoices, or cancel their subscription.
+router.get(
+  '/sponsor/billing-portal',
+  authenticate,
+  requireRole('sponsor'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const stripe = getStripe();
+      const userId = req.user!.id;
+
+      const sponsor = await prisma.sponsor.findUnique({
+        where: { userId },
+        select: { id: true, stripeCustomerId: true },
+      });
+
+      if (!sponsor) throw new AppError('Sponsor account not found', 404, 'NOT_FOUND');
+      if (!sponsor.stripeCustomerId) {
+        throw new AppError(
+          'No billing account found. Please subscribe first.',
+          400,
+          'BAD_REQUEST',
+        );
+      }
+
+      const returnUrl =
+        env.STRIPE_BILLING_PORTAL_RETURN_URL ??
+        `${env.APP_URL ?? 'http://localhost:3000'}/sponsor/dashboard`;
+
+      const portalSession = await stripe.billingPortal.sessions.create({
+        customer: sponsor.stripeCustomerId,
+        return_url: returnUrl,
+      });
+
+      const response: ApiSuccess<{ portalUrl: string }> = {
+        success: true,
+        data: { portalUrl: portalSession.url },
+      };
+      res.status(200).json(response);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
 // Webhook handler — exported and mounted with express.raw() in index.ts
 // ---------------------------------------------------------------------------
 
@@ -350,72 +495,323 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
   }
 
   try {
-    if (event.type === 'checkout.session.completed') {
-      // Browser Checkout flow — metadata lives on the Checkout Session
-      const checkoutSession = event.data.object as Stripe.Checkout.Session;
-      const huntId = checkoutSession.metadata?.['huntId'];
-      const playerId = checkoutSession.metadata?.['playerId'];
+    switch (event.type) {
+      // ---- Player ticket purchase (browser Checkout) ----
+      case 'checkout.session.completed': {
+        const checkoutSession = event.data.object as Stripe.Checkout.Session;
 
-      if (!huntId || !playerId) {
-        res.status(400).json({ error: 'Missing huntId/playerId in checkout session metadata' });
+        // Sponsor subscription checkout — provision Subscription record
+        if (checkoutSession.mode === 'subscription') {
+          await handleSubscriptionCheckout(checkoutSession);
+          res.status(200).json({ received: true });
+          return;
+        }
+
+        // Player ticket checkout — provision GameSession
+        const huntId = checkoutSession.metadata?.['huntId'];
+        const playerId = checkoutSession.metadata?.['playerId'];
+
+        if (!huntId || !playerId) {
+          res.status(400).json({ error: 'Missing huntId/playerId in checkout session metadata' });
+          return;
+        }
+
+        const stripePaymentId =
+          typeof checkoutSession.payment_intent === 'string'
+            ? checkoutSession.payment_intent
+            : checkoutSession.id;
+
+        const sessionId = await provisionHuntSession(
+          huntId,
+          playerId,
+          stripePaymentId,
+          'Hunt ticket purchase via Stripe Checkout',
+        );
+
+        void sendPaymentReceiptEmail(huntId, playerId, stripePaymentId).catch((err: unknown) =>
+          logger.error({ err }, 'email enqueue error (checkout)'),
+        );
+
+        res.status(200).json({ received: true, sessionId });
         return;
       }
 
-      const stripePaymentId =
-        typeof checkoutSession.payment_intent === 'string'
-          ? checkoutSession.payment_intent
-          : checkoutSession.id;
+      // ---- Player ticket purchase (native PaymentSheet) ----
+      case 'payment_intent.succeeded': {
+        const pi = event.data.object as Stripe.PaymentIntent;
+        const huntId = pi.metadata['huntId'];
+        const playerId = pi.metadata['playerId'];
 
-      const sessionId = await provisionHuntSession(
-        huntId,
-        playerId,
-        stripePaymentId,
-        'Hunt ticket purchase via Stripe Checkout',
-      );
+        if (!huntId || !playerId) {
+          // PaymentIntent belongs to something else (e.g. subscription setup) — ignore
+          res.status(200).json({ received: true });
+          return;
+        }
 
-      // Enqueue payment receipt email (fire-and-forget)
-      void sendPaymentReceiptEmail(huntId, playerId, stripePaymentId).catch((err: unknown) =>
-        console.error('email enqueue error (checkout):', err),
-      );
+        const sessionId = await provisionHuntSession(
+          huntId,
+          playerId,
+          pi.id,
+          'Hunt ticket purchase via native PaymentSheet',
+        );
 
-      res.status(200).json({ received: true, sessionId });
-      return;
-    }
+        void sendPaymentReceiptEmail(huntId, playerId, pi.id).catch((err: unknown) =>
+          logger.error({ err }, 'email enqueue error (payment_intent)'),
+        );
 
-    if (event.type === 'payment_intent.succeeded') {
-      // Native PaymentSheet flow — metadata lives on the PaymentIntent
-      const pi = event.data.object as Stripe.PaymentIntent;
-      const huntId = pi.metadata['huntId'];
-      const playerId = pi.metadata['playerId'];
+        res.status(200).json({ received: true, sessionId });
+        return;
+      }
 
-      if (!huntId || !playerId) {
-        // PaymentIntent not created by us (e.g. from browser checkout) — ignore
+      // ---- Sponsor subscription lifecycle ----
+      case 'customer.subscription.updated': {
+        const sub = event.data.object as Stripe.Subscription;
+        await upsertSubscription(sub);
         res.status(200).json({ received: true });
         return;
       }
 
-      const sessionId = await provisionHuntSession(
-        huntId,
-        playerId,
-        pi.id,
-        'Hunt ticket purchase via native PaymentSheet',
-      );
+      case 'customer.subscription.deleted': {
+        const sub = event.data.object as Stripe.Subscription;
+        await cancelSubscription(sub);
+        res.status(200).json({ received: true });
+        return;
+      }
 
-      // Enqueue payment receipt email (fire-and-forget)
-      void sendPaymentReceiptEmail(huntId, playerId, pi.id).catch((err: unknown) =>
-        console.error('email enqueue error (payment_intent):', err),
-      );
+      // ---- Sponsor invoice events ----
+      case 'invoice.paid': {
+        const invoice = event.data.object as Stripe.Invoice;
+        await handleInvoicePaid(invoice);
+        res.status(200).json({ received: true });
+        return;
+      }
 
-      res.status(200).json({ received: true, sessionId });
-      return;
+      case 'invoice.payment_failed': {
+        const invoice = event.data.object as Stripe.Invoice;
+        await handleInvoiceFailed(invoice);
+        res.status(200).json({ received: true });
+        return;
+      }
+
+      default:
+        // Acknowledge unhandled event types so Stripe stops retrying
+        res.status(200).json({ received: true });
     }
-
-    // Acknowledge all other event types
-    res.status(200).json({ received: true });
   } catch (err) {
-    console.error('Stripe webhook processing error:', err);
-    res.status(500).json({ error: 'Failed to process payment' });
+    logger.error({ err }, 'Stripe webhook processing error');
+    res.status(500).json({ error: 'Failed to process webhook event' });
   }
+}
+
+// ---------------------------------------------------------------------------
+// Subscription webhook helpers
+// ---------------------------------------------------------------------------
+
+// Map Stripe subscription status to our SubscriptionStatus enum
+function toSubscriptionStatus(
+  stripeStatus: Stripe.Subscription.Status,
+): 'ACTIVE' | 'PAST_DUE' | 'CANCELLED' | 'INCOMPLETE' | 'TRIALING' {
+  switch (stripeStatus) {
+    case 'active':
+      return 'ACTIVE';
+    case 'past_due':
+      return 'PAST_DUE';
+    case 'canceled':
+      return 'CANCELLED';
+    case 'trialing':
+      return 'TRIALING';
+    default:
+      return 'INCOMPLETE';
+  }
+}
+
+// Provision Subscription record after a successful sponsor subscription checkout
+async function handleSubscriptionCheckout(
+  checkoutSession: Stripe.Checkout.Session,
+): Promise<void> {
+  const sponsorId = checkoutSession.metadata?.['sponsorId'];
+  if (!sponsorId) {
+    logger.warn({ sessionId: checkoutSession.id }, 'Subscription checkout missing sponsorId');
+    return;
+  }
+
+  // Retrieve the full subscription object to get period dates
+  const stripe = new Stripe(env.STRIPE_SECRET_KEY!);
+  const stripeSubId =
+    typeof checkoutSession.subscription === 'string'
+      ? checkoutSession.subscription
+      : checkoutSession.subscription?.id;
+
+  if (!stripeSubId) return;
+
+  const sub = await stripe.subscriptions.retrieve(stripeSubId);
+  await upsertSubscription(sub, sponsorId);
+}
+
+// Create or update our Subscription record to mirror Stripe's state.
+// Period dates are set initially to the subscription start_date + 30 days as a placeholder;
+// invoice.paid will update them with the real invoice period_start / period_end.
+async function upsertSubscription(
+  sub: Stripe.Subscription,
+  sponsorIdOverride?: string,
+): Promise<void> {
+  const sponsorId = sponsorIdOverride ?? sub.metadata['sponsorId'];
+  if (!sponsorId) {
+    logger.warn({ stripeSubId: sub.id }, 'Cannot upsert subscription — no sponsorId in metadata');
+    return;
+  }
+
+  const status = toSubscriptionStatus(sub.status);
+  // start_date is the Unix timestamp when the subscription was created
+  const periodStart = new Date(sub.start_date * 1000);
+  // Approximate end of first period — invoice.paid will update with the real invoice dates
+  const periodEnd = new Date(sub.start_date * 1000 + 30 * 24 * 60 * 60 * 1000);
+
+  await prisma.subscription.upsert({
+    where: { stripeSubscriptionId: sub.id },
+    create: {
+      sponsorId,
+      stripeCustomerId: sub.customer as string,
+      stripeSubscriptionId: sub.id,
+      status,
+      currentPeriodStart: periodStart,
+      currentPeriodEnd: periodEnd,
+      cancelAtPeriodEnd: sub.cancel_at_period_end,
+    },
+    update: {
+      status,
+      cancelAtPeriodEnd: sub.cancel_at_period_end,
+    },
+  });
+
+  logger.info({ sponsorId, stripeSubId: sub.id, status }, 'Subscription upserted');
+}
+
+// Mark subscription as CANCELLED and set Sponsor status to PAUSED
+async function cancelSubscription(sub: Stripe.Subscription): Promise<void> {
+  const existing = await prisma.subscription.findUnique({
+    where: { stripeSubscriptionId: sub.id },
+    select: { sponsorId: true },
+  });
+
+  if (!existing) {
+    logger.warn({ stripeSubId: sub.id }, 'Subscription not found for cancellation');
+    return;
+  }
+
+  await prisma.$transaction([
+    prisma.subscription.update({
+      where: { stripeSubscriptionId: sub.id },
+      data: { status: 'CANCELLED' },
+    }),
+    prisma.sponsor.update({
+      where: { id: existing.sponsorId },
+      data: { status: 'PAUSED' },
+    }),
+  ]);
+
+  logger.info({ sponsorId: existing.sponsorId, stripeSubId: sub.id }, 'Subscription cancelled');
+}
+
+// Record a Payment (SPONSOR_FEE) and send a receipt email for a paid invoice
+async function handleInvoicePaid(invoice: Stripe.Invoice): Promise<void> {
+  // Skip $0 invoices (e.g. free-trial start)
+  if (!invoice.amount_paid || invoice.amount_paid === 0) return;
+
+  const stripeCustomerId = invoice.customer as string;
+  const sponsor = await prisma.sponsor.findUnique({
+    where: { stripeCustomerId },
+    select: { id: true, businessName: true, contactEmail: true },
+  });
+
+  if (!sponsor) {
+    logger.warn({ stripeCustomerId, invoiceId: invoice.id }, 'No sponsor for invoice.paid');
+    return;
+  }
+
+  // Idempotent — skip if payment already recorded for this invoice
+  const existing = await prisma.payment.findFirst({
+    where: { stripeInvoiceId: invoice.id },
+  });
+  if (existing) return;
+
+  // In Stripe SDK v20, the subscription ID lives in invoice.parent.subscription_details.subscription
+  const subRef = invoice.parent?.subscription_details?.subscription;
+  const stripeSubId = !subRef ? null : typeof subRef === 'string' ? subRef : subRef.id;
+
+  // Use invoice.id as the payment reference (payment_intent is no longer a top-level invoice field in v20)
+  const piId = invoice.id;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.payment.create({
+      data: {
+        paymentType: 'SPONSOR_FEE',
+        payerType: 'SPONSOR',
+        payerId: sponsor.id,
+        amountCents: invoice.amount_paid,
+        currency: invoice.currency.toUpperCase(),
+        stripePaymentId: piId,
+        stripeInvoiceId: invoice.id,
+        status: 'COMPLETED',
+        description: `Monthly platform fee — ${sponsor.businessName}`,
+      },
+    });
+
+    // Update subscription's real billing period from invoice dates
+    if (stripeSubId) {
+      await tx.subscription.updateMany({
+        where: { stripeSubscriptionId: stripeSubId },
+        data: {
+          currentPeriodStart: new Date(invoice.period_start * 1000),
+          currentPeriodEnd: new Date(invoice.period_end * 1000),
+          status: 'ACTIVE',
+        },
+      });
+    }
+  });
+
+  // Send receipt email if contact email is available
+  if (sponsor.contactEmail) {
+    const amount = `${(invoice.amount_paid / 100).toFixed(2)} ${invoice.currency.toUpperCase()}`;
+    await enqueueEmail({
+      to: sponsor.contactEmail,
+      subject: `Treasure Hunt invoice paid — ${amount}`,
+      type: 'payment_receipt',
+      payload: {
+        huntTitle: 'Sponsor Platform Fee',
+        amount,
+        paymentId: invoice.id,
+      },
+    }).catch((err: unknown) => logger.error({ err }, 'Failed to enqueue invoice receipt email'));
+  }
+
+  logger.info({ sponsorId: sponsor.id, invoiceId: invoice.id }, 'Sponsor invoice recorded');
+}
+
+// Send a payment failure notification email when a sponsor invoice cannot be collected
+async function handleInvoiceFailed(invoice: Stripe.Invoice): Promise<void> {
+  const stripeCustomerId = invoice.customer as string;
+  const sponsor = await prisma.sponsor.findUnique({
+    where: { stripeCustomerId },
+    select: { id: true, businessName: true, contactEmail: true },
+  });
+
+  if (!sponsor?.contactEmail) return;
+
+  const amount = `${(invoice.amount_due / 100).toFixed(2)} ${invoice.currency.toUpperCase()}`;
+
+  await enqueueEmail({
+    to: sponsor.contactEmail,
+    subject: `Action required: Treasure Hunt payment failed`,
+    type: 'payment_receipt', // Reuses receipt template — worker can branch on payload
+    payload: {
+      huntTitle: 'Sponsor Platform Fee — Payment Failed',
+      amount,
+      paymentId: invoice.id,
+    },
+  }).catch((err: unknown) => logger.error({ err }, 'Failed to enqueue invoice failure email'));
+
+  logger.warn({ sponsorId: sponsor.id, invoiceId: invoice.id }, 'Sponsor invoice payment failed');
 }
 
 export default router;

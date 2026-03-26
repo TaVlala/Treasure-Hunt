@@ -159,4 +159,59 @@ router.get('/analytics', async (req: Request, res: Response, next: NextFunction)
   } catch (e) { next(e); }
 });
 
+// --- GET /subscription ---
+// Returns the sponsor's current Stripe subscription status and billing period.
+// Used by the portal dashboard to show subscription state and CTA buttons.
+router.get('/subscription', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const sponsor = await prisma.sponsor.findUnique({
+      where: { userId: req.user!.id },
+      select: {
+        id: true,
+        monthlyFeeCents: true,
+        stripeCustomerId: true,
+        subscription: {
+          select: {
+            id: true,
+            status: true,
+            stripeSubscriptionId: true,
+            currentPeriodStart: true,
+            currentPeriodEnd: true,
+            cancelAtPeriodEnd: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
+      },
+    });
+
+    if (!sponsor) throw new AppError('Sponsor profile not found', 404, 'NOT_FOUND');
+
+    const data = sponsor.subscription
+      ? {
+          hasSubscription: true,
+          monthlyFeeCents: sponsor.monthlyFeeCents,
+          hasBillingAccount: !!sponsor.stripeCustomerId,
+          subscription: {
+            id: sponsor.subscription.id,
+            status: sponsor.subscription.status.toLowerCase(),
+            stripeSubscriptionId: sponsor.subscription.stripeSubscriptionId,
+            currentPeriodStart: sponsor.subscription.currentPeriodStart.toISOString(),
+            currentPeriodEnd: sponsor.subscription.currentPeriodEnd.toISOString(),
+            cancelAtPeriodEnd: sponsor.subscription.cancelAtPeriodEnd,
+            createdAt: sponsor.subscription.createdAt.toISOString(),
+            updatedAt: sponsor.subscription.updatedAt.toISOString(),
+          },
+        }
+      : {
+          hasSubscription: false,
+          monthlyFeeCents: sponsor.monthlyFeeCents,
+          hasBillingAccount: !!sponsor.stripeCustomerId,
+          subscription: null,
+        };
+
+    res.json({ success: true, data });
+  } catch (e) { next(e); }
+});
+
 export default router;

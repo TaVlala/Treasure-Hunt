@@ -57,3 +57,18 @@ export interface Sponsor {
 export interface SponsorDetail extends Sponsor {
   clueCount: number;
 }
+
+// Stripe recurring subscription status for a sponsor's platform fee
+export type SubscriptionStatus = 'active' | 'past_due' | 'cancelled' | 'incomplete' | 'trialing';
+
+export interface Subscription {
+  id: string;
+  sponsorId: string;
+  stripeSubscriptionId: string;
+  status: SubscriptionStatus;
+  currentPeriodStart: string; // ISO timestamp
+  currentPeriodEnd: string;   // ISO timestamp
+  cancelAtPeriodEnd: boolean;
+  createdAt: string;
+  updatedAt: string;
+}

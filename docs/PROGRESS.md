@@ -111,7 +111,7 @@
 - [ ] Seasonal hunt templates
 
 ### Mobile Player App
-- [ ] Map view for hunt discovery
+- [x] Map view for hunt discovery — Mapbox map with difficulty-coloured pins, bottom callout card, "View Hunt" CTA; list/map toggle pill in discover screen
 - [x] Paid ticket purchase (Stripe Checkout — "Buy Ticket" → browser → poll for session → navigate)
 - [x] Team creation + join flow — /team/create and /team/join screens; team options shown after joining a TEAM/BOTH mode hunt
 - [x] All clue types — IMAGE renders imageUrl, TEXT_RIDDLE shows answer input, PHOTO_CHALLENGE uses expo-image-picker + GPS gate; photo method added to submit schema + FoundMethod enum

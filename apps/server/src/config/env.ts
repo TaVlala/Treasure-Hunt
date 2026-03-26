@@ -33,6 +33,8 @@ const envSchema = z.object({
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
   // Public base URL of this server — used to build Stripe success/cancel redirect URLs
   APP_URL: z.string().url().optional(),
+  // Stripe Billing Portal return URL — where sponsors land after managing their subscription
+  STRIPE_BILLING_PORTAL_RETURN_URL: z.string().url().optional(),
 
   // Resend — optional; required for email notifications
   RESEND_API_KEY: z.string().optional(),

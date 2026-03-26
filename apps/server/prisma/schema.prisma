@@ -127,6 +127,14 @@ enum PaymentStatus {
   REFUNDED
 }
 
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  INCOMPLETE
+  TRIALING
+}
+
 // ---------------------------------------------------------------------------
 // Models
 // ---------------------------------------------------------------------------
@@ -260,16 +268,19 @@ model Sponsor {
   status          SponsorStatus @default(ACTIVE)
   contractStart   DateTime?     @map("contract_start") @db.Date
   contractEnd     DateTime?     @map("contract_end") @db.Date
-  monthlyFeeCents Int?          @map("monthly_fee_cents")
-  notes           String?       @db.Text
-  userId          String?       @unique @map("user_id") @db.Uuid
-  user            User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
-  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz()
+  monthlyFeeCents  Int?          @map("monthly_fee_cents")
+  notes            String?       @db.Text
+  userId           String?       @unique @map("user_id") @db.Uuid
+  user             User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  // Stripe customer ID — set when first subscription is created, reused for future charges
+  stripeCustomerId String?       @unique @map("stripe_customer_id") @db.VarChar(100)
+  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt        DateTime      @updatedAt @map("updated_at") @db.Timestamptz()
 
   sponsorClues    SponsorClue[]
   sponsorPrizes   SponsorPrize[]
   analyticsEvents AnalyticsEvent[]
+  subscription    Subscription?
 
   @@map("sponsors")
 }
@@ -445,6 +456,27 @@ model PlayerAchievement {
 
   @@unique([playerId, achievementId])
   @@map("player_achievements")
+}
+
+// Tracks the Stripe recurring subscription for a sponsor's monthly platform fee.
+// One sponsor → one subscription (enforced by @unique on sponsorId).
+model Subscription {
+  id                   String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sponsorId            String             @unique @map("sponsor_id") @db.Uuid
+  stripeCustomerId     String             @map("stripe_customer_id") @db.VarChar(100)
+  stripeSubscriptionId String             @unique @map("stripe_subscription_id") @db.VarChar(100)
+  status               SubscriptionStatus
+  currentPeriodStart   DateTime           @map("current_period_start") @db.Timestamptz()
+  currentPeriodEnd     DateTime           @map("current_period_end") @db.Timestamptz()
+  cancelAtPeriodEnd    Boolean            @default(false) @map("cancel_at_period_end")
+  createdAt            DateTime           @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt            DateTime           @updatedAt @map("updated_at") @db.Timestamptz()
+
+  sponsor Sponsor @relation(fields: [sponsorId], references: [id], onDelete: Cascade)
+
+  @@index([stripeSubscriptionId])
+  @@index([stripeCustomerId])
+  @@map("subscriptions")
 }
 
 model AnalyticsEvent {
