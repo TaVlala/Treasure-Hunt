@@ -3,6 +3,8 @@
 // PaymentSheet:     POST /api/v1/stripe/payment-sheet/:huntId    (native Apple Pay / Google Pay)
 // Sponsor billing:  POST /api/v1/stripe/sponsor/subscribe        (subscription Checkout Session)
 // Billing portal:   GET  /api/v1/stripe/sponsor/billing-portal   (Stripe Billing Portal URL)
+// Invoices:         GET  /api/v1/stripe/sponsor/invoices          (list sponsor payment history)
+// Invoice PDF:      GET  /api/v1/stripe/sponsor/invoices/:id/pdf  (stream generated PDF)
 // Webhook:          POST /api/v1/stripe/webhook                   (raw body, mounted in index.ts)
 // Pages:            GET  /api/v1/stripe/success|cancel            (HTML redirect targets)
 
@@ -14,6 +16,7 @@ import { AppError } from '../middleware/errorHandler';
 import { env } from '../config/env';
 import { enqueueEmail } from '../queues/index';
 import { logger } from '../lib/logger';
+import { generateInvoicePdf, invoiceNumber } from '../lib/invoice';
 import type { ApiSuccess } from '@treasure-hunt/shared';
 
 const router = Router();
@@ -465,6 +468,96 @@ router.get(
 );
 
 // ---------------------------------------------------------------------------
+// GET /stripe/sponsor/invoices — list sponsor payment history (SPONSOR_FEE only)
+// ---------------------------------------------------------------------------
+
+router.get(
+  '/sponsor/invoices',
+  authenticate,
+  requireRole('sponsor'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const sponsor = await prisma.sponsor.findUnique({
+        where: { userId: req.user!.id },
+        select: { id: true },
+      });
+      if (!sponsor) throw new AppError('Sponsor not found', 404, 'NOT_FOUND');
+
+      const payments = await prisma.payment.findMany({
+        where: { payerType: 'SPONSOR', payerId: sponsor.id, paymentType: 'SPONSOR_FEE' },
+        orderBy: { createdAt: 'desc' },
+        take: 24, // up to 2 years of monthly invoices
+      });
+
+      const data = payments.map((p) => ({
+        id: p.id,
+        amountCents: p.amountCents,
+        currency: p.currency,
+        description: p.description,
+        stripeInvoiceId: p.stripeInvoiceId,
+        status: p.status,
+        createdAt: p.createdAt.toISOString(),
+      }));
+
+      res.json({ success: true, data });
+    } catch (err) { next(err); }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// GET /stripe/sponsor/invoices/:paymentId/pdf — stream a generated PDF invoice
+// ---------------------------------------------------------------------------
+
+router.get(
+  '/sponsor/invoices/:paymentId/pdf',
+  authenticate,
+  requireRole('sponsor'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const paymentId = req.params['paymentId'] as string;
+
+      const sponsor = await prisma.sponsor.findUnique({
+        where: { userId: req.user!.id },
+        select: { id: true, businessName: true, contactName: true, contactEmail: true, address: true },
+      });
+      if (!sponsor) throw new AppError('Sponsor not found', 404, 'NOT_FOUND');
+
+      const payment = await prisma.payment.findFirst({
+        where: { id: paymentId, payerType: 'SPONSOR', payerId: sponsor.id, paymentType: 'SPONSOR_FEE' },
+      });
+      if (!payment) throw new AppError('Invoice not found', 404, 'NOT_FOUND');
+
+      // Derive period from description or use createdAt ± 1 month as fallback
+      const issuedAt = payment.createdAt;
+      const periodEnd = payment.createdAt;
+      const periodStart = new Date(periodEnd);
+      periodStart.setMonth(periodStart.getMonth() - 1);
+
+      const invNum = invoiceNumber(payment.stripeInvoiceId, payment.id);
+      const pdfBuffer = await generateInvoicePdf({
+        invoiceNumber: invNum,
+        issuedAt,
+        periodStart,
+        periodEnd,
+        amountCents: payment.amountCents,
+        currency: payment.currency,
+        description: payment.description ?? `Monthly platform fee — ${sponsor.businessName}`,
+        businessName: sponsor.businessName,
+        contactName: sponsor.contactName,
+        address: sponsor.address,
+        contactEmail: sponsor.contactEmail ?? '',
+        stripeInvoiceId: payment.stripeInvoiceId,
+      });
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${invNum}.pdf"`);
+      res.setHeader('Content-Length', pdfBuffer.length);
+      res.send(pdfBuffer);
+    } catch (err) { next(err); }
+  },
+);
+
+// ---------------------------------------------------------------------------
 // Webhook handler — exported and mounted with express.raw() in index.ts
 // ---------------------------------------------------------------------------
 
@@ -713,7 +806,7 @@ async function cancelSubscription(sub: Stripe.Subscription): Promise<void> {
   logger.info({ sponsorId: existing.sponsorId, stripeSubId: sub.id }, 'Subscription cancelled');
 }
 
-// Record a Payment (SPONSOR_FEE) and send a receipt email for a paid invoice
+// Record a Payment (SPONSOR_FEE) and email a branded PDF invoice to the sponsor
 async function handleInvoicePaid(invoice: Stripe.Invoice): Promise<void> {
   // Skip $0 invoices (e.g. free-trial start)
   if (!invoice.amount_paid || invoice.amount_paid === 0) return;
@@ -721,7 +814,7 @@ async function handleInvoicePaid(invoice: Stripe.Invoice): Promise<void> {
   const stripeCustomerId = invoice.customer as string;
   const sponsor = await prisma.sponsor.findUnique({
     where: { stripeCustomerId },
-    select: { id: true, businessName: true, contactEmail: true },
+    select: { id: true, businessName: true, contactName: true, contactEmail: true, address: true },
   });
 
   if (!sponsor) {
@@ -770,19 +863,33 @@ async function handleInvoicePaid(invoice: Stripe.Invoice): Promise<void> {
     }
   });
 
-  // Send receipt email if contact email is available
+  // Email branded PDF invoice if contact email is available
   if (sponsor.contactEmail) {
-    const amount = `${(invoice.amount_paid / 100).toFixed(2)} ${invoice.currency.toUpperCase()}`;
+    const currency = invoice.currency.toUpperCase();
+    const amount = `${currency === 'GBP' ? '£' : currency === 'EUR' ? '€' : '$'}${(invoice.amount_paid / 100).toFixed(2)}`;
+    const invNum = invoiceNumber(invoice.id, invoice.id);
+    const periodStart = new Date(invoice.period_start * 1000).toISOString();
+    const periodEnd = new Date(invoice.period_end * 1000).toISOString();
     await enqueueEmail({
       to: sponsor.contactEmail,
-      subject: `Treasure Hunt invoice paid — ${amount}`,
-      type: 'payment_receipt',
+      subject: `Your Treasure Hunt invoice ${invNum} — ${amount}`,
+      type: 'sponsor_invoice',
       payload: {
-        huntTitle: 'Sponsor Platform Fee',
+        invoiceNumber: invNum,
+        issuedAt: new Date().toISOString(),
+        periodStart,
+        periodEnd,
+        amountCents: invoice.amount_paid,
+        currency,
+        description: `Monthly platform fee — ${sponsor.businessName}`,
+        businessName: sponsor.businessName,
+        contactName: sponsor.contactName ?? null,
+        address: sponsor.address ?? null,
+        contactEmail: sponsor.contactEmail,
+        stripeInvoiceId: invoice.id,
         amount,
-        paymentId: invoice.id,
       },
-    }).catch((err: unknown) => logger.error({ err }, 'Failed to enqueue invoice receipt email'));
+    }).catch((err: unknown) => logger.error({ err }, 'Failed to enqueue sponsor invoice email'));
   }
 
   logger.info({ sponsorId: sponsor.id, invoiceId: invoice.id }, 'Sponsor invoice recorded');

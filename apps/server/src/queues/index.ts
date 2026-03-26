@@ -21,7 +21,7 @@ export interface AnalyticsJobData {
 export interface EmailJobData {
   to: string;
   subject: string;
-  type: 'payment_receipt' | 'achievement_unlock' | 'welcome';
+  type: 'payment_receipt' | 'achievement_unlock' | 'welcome' | 'sponsor_invoice';
   payload: Record<string, unknown>;
 }
 

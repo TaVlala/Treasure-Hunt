@@ -255,6 +255,12 @@ export default function SponsorPrizesPage() {
               >
                 Prizes
               </Link>
+              <Link
+                href="/sponsor/invoices"
+                className="text-xs text-[#555] hover:text-white px-3 py-1.5 rounded-lg transition-colors"
+              >
+                Invoices
+              </Link>
             </nav>
           </div>
           <button
