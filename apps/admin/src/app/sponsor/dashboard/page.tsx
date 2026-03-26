@@ -5,6 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
 
@@ -251,9 +252,25 @@ export default function SponsorDashboardPage() {
       {/* Top nav */}
       <header className="border-b border-[#242424] bg-[#0a0a0a] sticky top-0 z-10">
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
-          <p className="text-xs tracking-[0.3em] text-[#f59e0b] uppercase font-medium">
-            🗺️ Treasure Hunt
-          </p>
+          <div className="flex items-center gap-6">
+            <p className="text-xs tracking-[0.3em] text-[#f59e0b] uppercase font-medium">
+              🗺️ Treasure Hunt
+            </p>
+            <nav className="flex items-center gap-1">
+              <Link
+                href="/sponsor/dashboard"
+                className="text-xs text-white bg-[#1c1c1c] px-3 py-1.5 rounded-lg"
+              >
+                Dashboard
+              </Link>
+              <Link
+                href="/sponsor/prizes"
+                className="text-xs text-[#555] hover:text-white px-3 py-1.5 rounded-lg transition-colors"
+              >
+                Prizes
+              </Link>
+            </nav>
+          </div>
           <button
             onClick={signOut}
             className="text-xs text-[#888] hover:text-white border border-[#242424] hover:border-[#333] px-3 py-1.5 rounded-lg transition-colors"

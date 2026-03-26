@@ -214,4 +214,45 @@ router.get('/subscription', async (req: Request, res: Response, next: NextFuncti
   } catch (e) { next(e); }
 });
 
+// --- GET /prizes ---
+// Returns all prizes belonging to this sponsor, with hunt context and redemption stats.
+router.get('/prizes', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const sponsor = await prisma.sponsor.findUnique({
+      where: { userId: req.user!.id },
+      select: { id: true },
+    });
+    if (!sponsor) throw new AppError('Sponsor profile not found', 404, 'NOT_FOUND');
+
+    const prizes = await prisma.sponsorPrize.findMany({
+      where: { sponsorId: sponsor.id },
+      include: {
+        hunt: { select: { id: true, title: true, status: true } },
+        _count: { select: { redemptions: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const data = prizes.map((p) => ({
+      id: p.id,
+      title: p.title,
+      description: p.description,
+      prizeType: p.prizeType,
+      valueDescription: p.valueDescription,
+      redemptionLimit: p.redemptionLimit,
+      redemptionsUsed: p._count.redemptions,
+      expiryDate: p.expiryDate?.toISOString() ?? null,
+      isGrandPrize: p.isGrandPrize,
+      minCluesFound: p.minCluesFound,
+      imageUrl: p.imageUrl,
+      huntId: p.huntId,
+      huntTitle: p.hunt.title,
+      huntStatus: p.hunt.status,
+      createdAt: p.createdAt.toISOString(),
+    }));
+
+    res.json({ success: true, data });
+  } catch (e) { next(e); }
+});
+
 export default router;
