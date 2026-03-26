@@ -68,6 +68,14 @@ hunt tickets, and tourism board contracts.
 - TypeScript: 0 errors. Branch: `feature/phase3-sponsor-portal`
 - **Stripe Billing COMPLETE ✅**
 
+**Last completed chunk:** Automated invoice PDF generation (branch: `feature/invoice-pdf`):
+- `lib/invoice.ts`: pdfkit branded invoice — dark header band, bill-to section, line item table, gold total band, Stripe reference footer
+- `queues/index.ts`: `'sponsor_invoice'` added to `EmailJobData.type` union
+- `email.worker.ts`: `sponsor_invoice` job generates PDF buffer + attaches to Resend email; `buildInvoiceEmailHtml()` for body
+- `stripe.routes.ts`: `handleInvoicePaid` now enqueues `sponsor_invoice` job (with contactName, address); `GET /stripe/sponsor/invoices` (list SPONSOR_FEE payments, 24 max); `GET /stripe/sponsor/invoices/:id/pdf` (streams on-demand PDF)
+- `apps/admin/src/app/sponsor/invoices/page.tsx`: invoice history table (date, status badge, amount, ↓ PDF download button); nav updated on all three portal pages
+- TypeScript: 0 errors. Branch: `feature/invoice-pdf`
+
 **Last completed chunk:** Sponsor prize portal:
 - `sponsor.portal.routes.ts`: `GET /sponsor/prizes` — returns all SponsorPrize records with hunt context and live `_count.redemptions`
 - `apps/admin/src/app/sponsor/prizes/page.tsx`: read-only prize list grouped by hunt; type badge (Discount/Free Item/Experience); redemption progress bar; grand prize indicator; expiry with red highlight if past

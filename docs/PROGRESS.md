@@ -139,7 +139,7 @@
 ### Backend
 - [x] Stripe Billing for recurring sponsor fees — Checkout Session (subscription mode), Billing Portal, webhook lifecycle (created/updated/deleted/invoice.paid/payment_failed), Payment record on invoice.paid, email on failure; GET /sponsor/subscription endpoint
 - [x] Stripe Billing admin UI — sponsor dashboard billing section (subscribe/manage buttons, status badge, next billing date, cancelAtPeriodEnd warning); admin sponsor detail subscription badge
-- [ ] Automated invoice generation
+- [x] Automated invoice generation — pdfkit branded PDF (header, bill-to, line item, gold total band); sponsor_invoice BullMQ job with PDF attachment via Resend; GET /stripe/sponsor/invoices (history) + GET /stripe/sponsor/invoices/:id/pdf (on-demand download); /sponsor/invoices portal page
 - [ ] Multi-city tenant support
 - [ ] Advanced analytics (cohorts, retention)
 - [x] Rate limiting and abuse protection — helmet security headers, express-rate-limit (auth 10/15min, game 60/min, general 200/min), XSS sanitisation middleware
