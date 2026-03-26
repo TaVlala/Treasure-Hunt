@@ -48,6 +48,6 @@ export async function logout(): Promise<void> {
   } finally {
     clearClientToken();
     localStorage.removeItem(USER_STORAGE_KEY);
-    window.location.href = '/login';
+    window.location.href = '/admin/login';
   }
 }

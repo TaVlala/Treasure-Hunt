@@ -64,7 +64,7 @@ export async function clientFetch<T>(path: string, init: RequestInit = {}): Prom
     if (!newToken) {
       clearClientToken();
       if (typeof window !== 'undefined') {
-        window.location.href = '/login';
+        window.location.href = '/admin/login';
       }
       throw new Error('Session expired — please log in again');
     }

@@ -13,12 +13,26 @@ export default function RootPage() {
           <Link href="/" className="text-xs uppercase tracking-widest font-semibold text-amber-400">
             Treasure Hunt
           </Link>
-          <Link
-            href="/about"
-            className="text-xs font-medium text-white/70 hover:text-white transition-colors"
-          >
-            How it Works
-          </Link>
+          <div className="flex items-center gap-4">
+            <Link
+              href="/about"
+              className="text-xs font-medium text-white/40 hover:text-white/70 transition-colors hidden sm:block"
+            >
+              How it Works
+            </Link>
+            <Link
+              href="/player/login"
+              className="text-xs font-medium text-white/80 hover:text-white border border-white/20 hover:border-white/40 px-4 py-1.5 rounded-full transition-colors"
+            >
+              Sign In
+            </Link>
+            <Link
+              href="/player/register"
+              className="text-xs font-semibold bg-amber-400 hover:bg-amber-300 text-black px-4 py-1.5 rounded-full transition-colors"
+            >
+              Get Started
+            </Link>
+          </div>
         </div>
       </nav>
 
