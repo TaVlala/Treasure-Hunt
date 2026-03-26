@@ -68,6 +68,15 @@ hunt tickets, and tourism board contracts.
 - TypeScript: 0 errors. Branch: `feature/phase3-sponsor-portal`
 - **Stripe Billing COMPLETE ✅**
 
+**Last completed chunk:** Tourist mode (branch: `feature/tourist-mode`):
+- `apps/server/src/routes/public.routes.ts`: `GET /public/cities` — distinct city names from ACTIVE hunts, alphabetical
+- `apps/mobile/lib/touristPrefs.ts`: AsyncStorage helpers — `getTouristPrefs()` / `setTouristCity(city|null)` / `clearTouristCity()`; keys: `tourist_onboarded` + `tourist_city`
+- `apps/mobile/app/onboarding/city-select.tsx`: full-page city picker — chips from API, "Explore all" option, Space Grotesk/Inter typography, works as onboarding AND from profile (`?from=profile`)
+- `apps/mobile/app/(tabs)/_layout.tsx`: after auth check, reads `tourist_onboarded`; redirects to `/onboarding/city-select` on first launch
+- `apps/mobile/app/(tabs)/index.tsx`: seeds `cityFilter` + `searchText` from tourist pref on mount
+- `apps/mobile/app/(tabs)/profile.tsx`: "My City" settings row showing current city; taps → city-select
+- TypeScript: 0 new errors. Merged to main.
+
 **Last completed chunk:** Design system + hints (branch: `feature/design-system`):
 - `apps/mobile/lib/theme.ts`: centralized `Colors`, `Fonts`, `FontSize`, `Spacing`, `Radius` tokens
 - `apps/mobile/app/_layout.tsx`: loads **Space Grotesk** (700/600/500) + **Inter** (400/500/600/700) via `expo-font`; holds render until fonts ready
