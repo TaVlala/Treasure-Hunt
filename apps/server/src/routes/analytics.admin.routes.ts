@@ -494,6 +494,123 @@ router.get('/players/live', async (req: Request, res: Response, next: NextFuncti
 });
 
 // ---------------------------------------------------------------------------
+// GET /retention — weekly player cohort retention heatmap
+// ---------------------------------------------------------------------------
+// Returns up to 12 weekly cohorts. Each cohort row contains:
+//   week: ISO string of cohort week start (Monday)
+//   size: number of new players who first played in that week
+//   retained: array of [week0%, week1%, week2%, ...] retention rates
+//   weeks: array of week offsets (0 = cohort week, 1 = next week, etc.)
+// ---------------------------------------------------------------------------
+
+interface RetentionCohort {
+  week: string;        // cohort week start (ISO Monday)
+  size: number;        // players who first played this week
+  rates: (number | null)[]; // retention % per subsequent week (null = future)
+}
+
+interface RetentionData {
+  cohorts: RetentionCohort[];
+  weekCount: number;   // number of weeks tracked (= max columns)
+  avgWeek1Retention: number | null;  // avg % retained in week 1 across all cohorts
+  avgWeek2Retention: number | null;
+}
+
+router.get('/retention', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    // Truncate each session's startedAt to its ISO week start (Monday 00:00 UTC)
+    // Then find each player's earliest cohort week and which weeks they were active
+    const rows = await prisma.$queryRaw<
+      Array<{ cohort_week: Date; active_week: Date; player_id: string }>
+    >`
+      WITH player_weeks AS (
+        SELECT
+          gs.player_id,
+          date_trunc('week', gs.started_at) AS session_week
+        FROM game_sessions gs
+        WHERE gs.started_at >= NOW() - INTERVAL '12 weeks'
+        GROUP BY gs.player_id, date_trunc('week', gs.started_at)
+      ),
+      player_cohorts AS (
+        SELECT
+          player_id,
+          MIN(session_week) AS cohort_week
+        FROM player_weeks
+        GROUP BY player_id
+      )
+      SELECT
+        pc.cohort_week,
+        pw.session_week AS active_week,
+        pw.player_id
+      FROM player_cohorts pc
+      JOIN player_weeks pw ON pw.player_id = pc.player_id
+      ORDER BY pc.cohort_week, pw.session_week
+    `;
+
+    // Group by cohort week
+    const cohortMap = new Map<string, { players: Set<string>; activeByOffset: Map<number, Set<string>> }>();
+
+    for (const row of rows) {
+      const cohortKey = row.cohort_week.toISOString();
+      if (!cohortMap.has(cohortKey)) {
+        cohortMap.set(cohortKey, { players: new Set(), activeByOffset: new Map() });
+      }
+      const cohort = cohortMap.get(cohortKey)!;
+      cohort.players.add(row.player_id);
+
+      // Calculate week offset (0 = cohort week, 1 = next week, ...)
+      const offsetMs = row.active_week.getTime() - row.cohort_week.getTime();
+      const offsetWeeks = Math.round(offsetMs / (7 * 24 * 60 * 60 * 1000));
+      if (!cohort.activeByOffset.has(offsetWeeks)) {
+        cohort.activeByOffset.set(offsetWeeks, new Set());
+      }
+      cohort.activeByOffset.get(offsetWeeks)!.add(row.player_id);
+    }
+
+    const now = new Date();
+    const weekCount = 12;
+
+    const cohorts: RetentionCohort[] = Array.from(cohortMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([week, data]) => {
+        const cohortStart = new Date(week);
+        const rates: (number | null)[] = [];
+
+        for (let offset = 0; offset < weekCount; offset++) {
+          const weekStart = new Date(cohortStart.getTime() + offset * 7 * 24 * 60 * 60 * 1000);
+          // Mark future weeks as null
+          if (weekStart > now) {
+            rates.push(null);
+            continue;
+          }
+          const activeSet = data.activeByOffset.get(offset);
+          const pct = activeSet ? Math.round((activeSet.size / data.players.size) * 100) : 0;
+          rates.push(pct);
+        }
+
+        return { week, size: data.players.size, rates };
+      });
+
+    // Compute average week-1 and week-2 retention across cohorts that have past data
+    const week1Rates = cohorts.map((c) => c.rates[1]).filter((r): r is number => r !== null);
+    const week2Rates = cohorts.map((c) => c.rates[2]).filter((r): r is number => r !== null);
+    const avg = (arr: number[]) => arr.length ? Math.round(arr.reduce((s, v) => s + v, 0) / arr.length) : null;
+
+    const data: RetentionData = {
+      cohorts,
+      weekCount,
+      avgWeek1Retention: avg(week1Rates),
+      avgWeek2Retention: avg(week2Rates),
+    };
+
+    const response: ApiSuccess<RetentionData> = { success: true, data };
+    res.status(200).json(response);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---------------------------------------------------------------------------
 // GET /sponsors/:id/report.pdf — PDF analytics report for a single sponsor
 // ---------------------------------------------------------------------------
 

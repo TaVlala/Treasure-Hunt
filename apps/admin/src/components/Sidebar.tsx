@@ -56,6 +56,15 @@ const NAV_ITEMS = [
     ),
   },
   {
+    label: 'Retention',
+    href: '/retention',
+    icon: (
+      <svg width="16" height="16" fill="none" viewBox="0 0 16 16">
+        <path d="M8 2a6 6 0 100 12A6 6 0 008 2zM8 5v3l2 2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    ),
+  },
+  {
     label: 'Revenue',
     href: '/revenue',
     icon: (
