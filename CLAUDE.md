@@ -68,6 +68,17 @@ hunt tickets, and tourism board contracts.
 - TypeScript: 0 errors. Branch: `feature/phase3-sponsor-portal`
 - **Stripe Billing COMPLETE ✅**
 
+**Last completed chunk:** Design system + hints (branch: `feature/design-system`):
+- `apps/mobile/lib/theme.ts`: centralized `Colors`, `Fonts`, `FontSize`, `Spacing`, `Radius` tokens
+- `apps/mobile/app/_layout.tsx`: loads **Space Grotesk** (700/600/500) + **Inter** (400/500/600/700) via `expo-font`; holds render until fonts ready
+- `apps/mobile/components/ui/Button.tsx`: pill-shaped reusable button — primary/secondary/ghost/danger variants, sm/md/lg sizes, loading state
+- `apps/mobile/components/ui/Badge.tsx`: `DifficultyBadge`, `PriceBadge`, `StatusBadge`, `DotBadge` with centralized color semantics
+- `apps/mobile/app/(tabs)/index.tsx`: `HuntCard` uses Space Grotesk for titles, Inter for body; tags use new Badge components
+- `apps/admin/src/app/layout.tsx`: Inter loaded via `next/font/google` with CSS variable `--font-inter`
+- `apps/admin/tailwind.config.js`: `fontFamily.sans` uses `var(--font-inter)` first in stack
+- Hints confirmed fully implemented (marked done in PROGRESS.md — was stale)
+- TypeScript: 0 new errors. Merged to main.
+
 **Last completed chunk:** Bulk hunt management (branch: `feature/bulk-hunt-management`):
 - `hunt.admin.routes.ts`: `POST /admin/hunts/bulk` — validates ids (non-empty, max 50) + action (publish/archive/duplicate); publish → `updateMany` status ACTIVE; archive → `updateMany` status ARCHIVED; duplicate → clones each hunt + clues with PostGIS `$executeRaw`
 - `BulkHuntManager.tsx`: client component with `Set<string>` selection state; per-row checkboxes; select-all header; floating `BulkActionBar` (fixed bottom, Publish/Archive/Duplicate/Clear); single per-row `SingleDuplicateButton` preserved
