@@ -13,8 +13,10 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useRouter } from 'expo-router';
 import { playerFetch } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
+import { getTouristPrefs } from '@/lib/touristPrefs';
 
 // ---------------------------------------------------------------------------
 // Design tokens (matches existing screens)
@@ -189,12 +191,14 @@ function StatCol({ value, label, icon }: StatColProps) {
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
+  const router = useRouter();
 
   const [profile, setProfile] = useState<PlayerProfile | null>(null);
   const [achievements, setAchievements] = useState<AchievementDef[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [touristCity, setTouristCity] = useState<string | null>(null);
 
   // Fetches profile and achievement data in parallel
   const fetchData = useCallback(async () => {
@@ -211,14 +215,20 @@ export default function ProfileScreen() {
     }
   }, []);
 
-  // Initial load on mount
+  // Initial load on mount — profile data + tourist city pref
   useEffect(() => {
     void (async () => {
       setIsLoading(true);
-      await fetchData();
+      const [, prefs] = await Promise.all([fetchData(), getTouristPrefs()]);
+      setTouristCity(prefs.city);
       setIsLoading(false);
     })();
   }, [fetchData]);
+
+  // Refresh tourist city when screen comes back into focus (e.g. returning from city-select)
+  useEffect(() => {
+    getTouristPrefs().then((prefs) => setTouristCity(prefs.city));
+  }, []);
 
   // Pull-to-refresh handler
   const onRefresh = useCallback(async () => {
@@ -384,6 +394,29 @@ export default function ProfileScreen() {
             ))}
           </View>
         )}
+
+        {/* Settings section */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>SETTINGS</Text>
+        </View>
+        <View style={styles.settingsCard}>
+          <TouchableOpacity
+            style={styles.settingsRow}
+            onPress={() => router.push('/onboarding/city-select?from=profile')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.settingsLeft}>
+              <Text style={styles.settingsIcon}>📍</Text>
+              <View>
+                <Text style={styles.settingsLabel}>My City</Text>
+                <Text style={styles.settingsValue}>
+                  {touristCity ?? 'All cities'}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.settingsChevron}>›</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -630,5 +663,46 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 20,
+  },
+
+  // Settings section
+  settingsCard: {
+    marginHorizontal: 16,
+    backgroundColor: SURFACE,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: BORDER,
+    overflow: 'hidden',
+    marginBottom: 32,
+  },
+  settingsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  settingsLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  settingsIcon: {
+    fontSize: 20,
+  },
+  settingsLabel: {
+    color: TEXT,
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  settingsValue: {
+    color: MUTED,
+    fontSize: 12,
+  },
+  settingsChevron: {
+    color: MUTED,
+    fontSize: 20,
+    fontWeight: '300',
   },
 });

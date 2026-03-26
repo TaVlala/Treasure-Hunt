@@ -141,6 +141,23 @@ router.get('/hunts', async (req: Request, res: Response, next: NextFunction) => 
   }
 });
 
+// GET /cities — returns distinct city names from ACTIVE hunts, sorted alphabetically.
+// Used by the mobile tourist mode city picker.
+router.get('/cities', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const rows = await prisma.hunt.findMany({
+      where: { status: 'ACTIVE' },
+      select: { city: true },
+      distinct: ['city'],
+      orderBy: { city: 'asc' },
+    });
+    const cities = rows.map((r) => r.city);
+    res.json({ success: true, data: cities });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /hunts/:slug — fetch a single ACTIVE hunt by slug.
 // Returns 404 if not found or not ACTIVE. Public: no auth required.
 router.get('/hunts/:slug', async (req: Request, res: Response, next: NextFunction) => {

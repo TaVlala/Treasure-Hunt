@@ -5,6 +5,8 @@
 import { Tabs, Redirect } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { View, ActivityIndicator } from 'react-native';
+import { useState, useEffect } from 'react';
+import { getTouristPrefs } from '@/lib/touristPrefs';
 
 const BG = '#0a0a0a';
 const SURFACE = '#141414';
@@ -14,9 +16,17 @@ const MUTED = '#555555';
 
 export default function TabsLayout() {
   const { user, isLoading } = useAuth();
+  const [onboarded, setOnboarded] = useState<boolean | null>(null);
 
-  // Show spinner while auth state is being restored
-  if (isLoading) {
+  // Check tourist onboarding state after auth resolves
+  useEffect(() => {
+    if (!isLoading && user) {
+      getTouristPrefs().then((prefs) => setOnboarded(prefs.onboarded));
+    }
+  }, [isLoading, user]);
+
+  // Show spinner while auth or onboarding state is loading
+  if (isLoading || (user && onboarded === null)) {
     return (
       <View style={{ flex: 1, backgroundColor: BG, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator color={ACCENT} />
@@ -27,6 +37,11 @@ export default function TabsLayout() {
   // Not logged in — send to login screen
   if (!user) {
     return <Redirect href="/(auth)/login" />;
+  }
+
+  // First launch — show city picker
+  if (!onboarded) {
+    return <Redirect href="/onboarding/city-select" />;
   }
 
   return (

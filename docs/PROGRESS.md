@@ -122,7 +122,7 @@
 - [x] Push notification handling (expo-notifications registered on login/restore, foreground handler configured)
 - [x] Offline mode (cached clue content) — bundle fetched on hunt start, clues served from AsyncStorage cache
 - [x] Hunt history — /history tab shows completed sessions with scores and dates
-- [ ] Tourist mode ("I'm visiting [city]")
+- [x] Tourist mode ("I'm visiting [city]") — city-select onboarding screen on first launch; GET /public/cities endpoint; tourist pref persisted to AsyncStorage; discover screen pre-filtered; profile "My City" settings row
 - [x] Social sharing — Share Result button on completion screen via Share.share() (score, time, clues, deep link)
 
 ### Public Pages

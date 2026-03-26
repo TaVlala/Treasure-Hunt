@@ -20,6 +20,7 @@ import { useAuth } from '@/context/AuthContext';
 import { playerFetch } from '@/lib/api';
 import { Fonts } from '@/lib/theme';
 import { DotBadge, PriceBadge, Badge } from '@/components/ui/Badge';
+import { getTouristPrefs } from '@/lib/touristPrefs';
 import type { Hunt, PaginatedData } from '@treasure-hunt/shared';
 import MapboxGL from '@rnmapbox/maps';
 
@@ -292,11 +293,18 @@ export default function DiscoverScreen() {
     }
   }, []);
 
-  // Initial load
+  // Initial load — seed city filter from tourist preference
   useEffect(() => {
     void (async () => {
       setIsLoading(true);
-      await fetchHunts();
+      const prefs = await getTouristPrefs();
+      if (prefs.city) {
+        setCityFilter(prefs.city);
+        setSearchText(prefs.city);
+        await fetchHunts(prefs.city);
+      } else {
+        await fetchHunts();
+      }
       setIsLoading(false);
     })();
   }, [fetchHunts]);
