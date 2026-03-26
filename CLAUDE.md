@@ -68,6 +68,12 @@ hunt tickets, and tourism board contracts.
 - TypeScript: 0 errors. Branch: `feature/phase3-sponsor-portal`
 - **Stripe Billing COMPLETE ✅**
 
+**Last completed chunk:** Player retention cohort analytics (branch: `feature/retention-analytics`):
+- `analytics.admin.routes.ts`: `GET /admin/analytics/retention` — raw SQL weekly cohort query (`date_trunc('week', ...)`, player's first session = cohort week, join active weeks); returns 12×12 rate matrix, null for future weeks; `avgWeek1Retention` + `avgWeek2Retention` summary
+- `apps/admin/src/app/(dashboard)/retention/page.tsx`: server component; 3 stat cards; cohort heatmap table with gold heat cells (intensity by %); future weeks grayed; legend; empty state
+- `Sidebar.tsx`: Retention nav item (clock icon) after Analytics
+- TypeScript: 0 errors. Merged to main.
+
 **Last completed chunk:** Automated invoice PDF generation (branch: `feature/invoice-pdf`):
 - `lib/invoice.ts`: pdfkit branded invoice — dark header band, bill-to section, line item table, gold total band, Stripe reference footer
 - `queues/index.ts`: `'sponsor_invoice'` added to `EmailJobData.type` union

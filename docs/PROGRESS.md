@@ -141,7 +141,7 @@
 - [x] Stripe Billing admin UI — sponsor dashboard billing section (subscribe/manage buttons, status badge, next billing date, cancelAtPeriodEnd warning); admin sponsor detail subscription badge
 - [x] Automated invoice generation — pdfkit branded PDF (header, bill-to, line item, gold total band); sponsor_invoice BullMQ job with PDF attachment via Resend; GET /stripe/sponsor/invoices (history) + GET /stripe/sponsor/invoices/:id/pdf (on-demand download); /sponsor/invoices portal page
 - [ ] Multi-city tenant support
-- [ ] Advanced analytics (cohorts, retention)
+- [x] Advanced analytics — player retention cohort heatmap: GET /admin/analytics/retention (12-week SQL cohort query), /retention page (stat cards + heatmap table + legend, gold heat cells by %), Sidebar link
 - [x] Rate limiting and abuse protection — helmet security headers, express-rate-limit (auth 10/15min, game 60/min, general 200/min), XSS sanitisation middleware
 - [ ] API versioning
 - [x] Background job queue (BullMQ) — analyticsQueue + emailQueue + cleanupQueue; analytics.worker (off request thread), email.worker (Resend, retry x3), cleanup.worker (nightly 02:00 UTC purge); Bull Board at /bull-board
