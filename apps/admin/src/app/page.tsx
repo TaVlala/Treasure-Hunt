@@ -14,10 +14,10 @@ export default function RootPage() {
             Treasure Hunt
           </Link>
           <Link
-            href="/login"
-            className="text-xs font-medium text-white/70 hover:text-white border border-white/20 hover:border-white/40 px-4 py-1.5 rounded-full transition-colors"
+            href="/about"
+            className="text-xs font-medium text-white/70 hover:text-white transition-colors"
           >
-            Admin Login
+            How it Works
           </Link>
         </div>
       </nav>
