@@ -469,4 +469,127 @@ router.post('/:id/duplicate', async (req: Request, res: Response, next: NextFunc
   }
 });
 
+// ---------------------------------------------------------------------------
+// POST /bulk — Apply a batch action to multiple hunts by ID
+// Actions: 'publish' (ACTIVE), 'archive' (ARCHIVED), 'duplicate' (new DRAFTs)
+// ---------------------------------------------------------------------------
+
+const BULK_ACTIONS = ['publish', 'archive', 'duplicate'] as const;
+type BulkAction = (typeof BULK_ACTIONS)[number];
+
+interface BulkRequestBody {
+  ids: string[];
+  action: BulkAction;
+}
+
+router.post('/bulk', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const body = req.body as BulkRequestBody;
+
+    if (!Array.isArray(body.ids) || body.ids.length === 0) {
+      throw new AppError('ids must be a non-empty array', 400, 'VALIDATION_ERROR');
+    }
+    if (!BULK_ACTIONS.includes(body.action)) {
+      throw new AppError(`action must be one of: ${BULK_ACTIONS.join(', ')}`, 400, 'VALIDATION_ERROR');
+    }
+    if (body.ids.length > 50) {
+      throw new AppError('Cannot bulk-operate on more than 50 hunts at once', 400, 'VALIDATION_ERROR');
+    }
+
+    const ids = body.ids;
+
+    if (body.action === 'publish') {
+      await prisma.hunt.updateMany({
+        where: { id: { in: ids } },
+        data: { status: 'ACTIVE' },
+      });
+      res.json({ success: true, message: `${ids.length} hunt(s) published`, data: { affected: ids.length } });
+      return;
+    }
+
+    if (body.action === 'archive') {
+      await prisma.hunt.updateMany({
+        where: { id: { in: ids } },
+        data: { status: 'ARCHIVED' },
+      });
+      res.json({ success: true, message: `${ids.length} hunt(s) archived`, data: { affected: ids.length } });
+      return;
+    }
+
+    // Duplicate — clone each hunt + clues as new DRAFTs
+    if (body.action === 'duplicate') {
+      const originals = await prisma.hunt.findMany({ where: { id: { in: ids } } });
+      const newIds: string[] = [];
+
+      for (const original of originals) {
+        const newSlug = await resolveUniqueSlug(original.title + ' Copy');
+        const newHunt = await prisma.hunt.create({
+          data: {
+            title: original.title + ' Copy',
+            slug: newSlug,
+            description: original.description,
+            city: original.city,
+            region: original.region,
+            difficulty: original.difficulty,
+            theme: original.theme,
+            huntType: original.huntType,
+            ticketPriceCents: original.ticketPriceCents,
+            currency: original.currency,
+            timeLimitMinutes: original.timeLimitMinutes,
+            maxPlayers: original.maxPlayers,
+            teamMode: original.teamMode,
+            maxTeamSize: original.maxTeamSize,
+            status: 'DRAFT',
+            startsAt: original.startsAt,
+            endsAt: original.endsAt,
+            thumbnailUrl: original.thumbnailUrl,
+            coverImageUrl: original.coverImageUrl,
+            centerLat: original.centerLat.toNumber(),
+            centerLng: original.centerLng.toNumber(),
+            zoomLevel: original.zoomLevel,
+            whitelabelName: original.whitelabelName,
+            whitelabelLogoUrl: original.whitelabelLogoUrl,
+            whitelabelColor: original.whitelabelColor,
+            metaTitle: original.metaTitle,
+            metaDescription: original.metaDescription,
+            createdBy: req.user!.id,
+          },
+        });
+        newIds.push(newHunt.id);
+
+        // Clone clues with PostGIS geography
+        const clues = await prisma.clue.findMany({ where: { huntId: original.id }, orderBy: { orderIndex: 'asc' } }) as ClueRow[];
+        for (const clue of clues) {
+          const newClue = await prisma.clue.create({
+            data: {
+              huntId: newHunt.id,
+              orderIndex: clue.orderIndex,
+              title: clue.title,
+              description: clue.description,
+              hintText: clue.hintText,
+              clueType: clue.clueType,
+              answer: clue.answer,
+              imageUrl: clue.imageUrl,
+              latitude: clue.latitude.toNumber(),
+              longitude: clue.longitude.toNumber(),
+              proximityRadiusMeters: clue.proximityRadiusMeters,
+              isBonus: clue.isBonus,
+              points: clue.points,
+              unlockMessage: clue.unlockMessage,
+            },
+          });
+          await prisma.$executeRaw`UPDATE clues SET location = ST_SetSRID(ST_MakePoint(${clue.longitude}::float, ${clue.latitude}::float), 4326) WHERE id = ${newClue.id}`;
+        }
+      }
+
+      res.json({ success: true, message: `${originals.length} hunt(s) duplicated`, data: { affected: originals.length, newIds } });
+      return;
+    }
+    // Unreachable — all actions handled above
+    next(new AppError('Unknown action', 400, 'VALIDATION_ERROR'));
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

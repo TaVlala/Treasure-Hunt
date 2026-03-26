@@ -6,110 +6,9 @@ import { Suspense } from 'react';
 import { serverFetch } from '@/lib/server-api';
 import type { Hunt, PaginatedData } from '@treasure-hunt/shared';
 import { HuntsFilters } from './HuntsFilters';
-import { DuplicateButton } from './DuplicateButton';
+import { BulkHuntManager } from './BulkHuntManager';
 
 const PAGE_SIZE = 20;
-
-// Format ISO date string to "Mar 9, 2026"
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-}
-
-const STATUS_STYLES: Record<string, string> = {
-  active: 'text-green-400 bg-green-400/10',
-  draft: 'text-text-muted bg-surface-2',
-  paused: 'text-yellow-400 bg-yellow-400/10',
-  completed: 'text-blue-400 bg-blue-400/10',
-  archived: 'text-text-faint bg-surface-2',
-};
-
-const DIFFICULTY_STYLES: Record<string, string> = {
-  easy: 'text-green-400 bg-green-400/10',
-  medium: 'text-yellow-400 bg-yellow-400/10',
-  hard: 'text-red-400 bg-red-400/10',
-};
-
-// Small coloured badge pill
-function Badge({ text, className }: { text: string; className: string }) {
-  return (
-    <span
-      className={`
-        text-[10px] uppercase tracking-widest font-medium
-        px-2.5 py-1 rounded-full ${className}
-      `}
-    >
-      {text}
-    </span>
-  );
-}
-
-// Single row in the hunts table
-function HuntRow({ hunt, index }: { hunt: Hunt; index: number }) {
-  return (
-    <div
-      className={`
-        flex items-center gap-4 py-4
-        ${index !== 0 ? 'border-t border-border' : ''}
-      `}
-    >
-      {/* Title + city — takes remaining space */}
-      <div className="flex-1 min-w-0">
-        <Link
-          href={`/hunts/${hunt.id}`}
-          className="text-sm font-medium text-white hover:text-accent transition-colors truncate block"
-        >
-          {hunt.title}
-        </Link>
-        <p className="text-xs text-text-muted mt-0.5">
-          {hunt.city}
-          {hunt.region ? `, ${hunt.region}` : ''}
-        </p>
-      </div>
-
-      {/* Hunt type badge */}
-      <div className="hidden sm:flex w-12 shrink-0 justify-center">
-        <Badge
-          text={hunt.huntType}
-          className={
-            hunt.huntType === 'paid'
-              ? 'text-accent bg-accent/10'
-              : 'text-text-muted bg-surface-2'
-          }
-        />
-      </div>
-
-      {/* Difficulty badge */}
-      <div className="hidden md:flex w-20 shrink-0 justify-center">
-        <Badge
-          text={hunt.difficulty}
-          className={DIFFICULTY_STYLES[hunt.difficulty] ?? 'text-text-muted bg-surface-2'}
-        />
-      </div>
-
-      {/* Status badge */}
-      <div className="flex w-24 shrink-0 justify-center">
-        <Badge
-          text={hunt.status}
-          className={STATUS_STYLES[hunt.status] ?? 'text-text-muted bg-surface-2'}
-        />
-      </div>
-
-      {/* Created date */}
-      <div className="hidden lg:block w-28 shrink-0 text-right">
-        <p className="text-xs text-text-muted">{formatDate(hunt.createdAt)}</p>
-      </div>
-
-      {/* Actions — duplicate button, hidden on small screens */}
-      <div className="hidden lg:flex w-20 shrink-0 justify-end">
-        <DuplicateButton huntId={hunt.id} />
-      </div>
-    </div>
-  );
-}
 
 interface PageProps {
   searchParams: Promise<{ status?: string; page?: string }>;
@@ -173,19 +72,7 @@ export default async function HuntsPage({ searchParams }: PageProps) {
       {/* Table */}
       <div className="bg-surface border border-border rounded-xl px-6">
 
-        {/* Column headers — only shown when there are rows */}
-        {hunts.length > 0 && (
-          <div className="flex items-center gap-4 pb-3 pt-4 border-b border-border">
-            <p className="flex-1 text-[10px] uppercase tracking-widest text-text-faint">Hunt</p>
-            <p className="hidden sm:block w-12 text-center text-[10px] uppercase tracking-widest text-text-faint">Type</p>
-            <p className="hidden md:block w-20 text-center text-[10px] uppercase tracking-widest text-text-faint">Difficulty</p>
-            <p className="w-24 text-center text-[10px] uppercase tracking-widest text-text-faint">Status</p>
-            <p className="hidden lg:block w-28 text-right text-[10px] uppercase tracking-widest text-text-faint">Created</p>
-            <p className="hidden lg:block w-20 text-right text-[10px] uppercase tracking-widest text-text-faint">Actions</p>
-          </div>
-        )}
-
-        {/* Rows or empty/error states */}
+        {/* Rows with bulk selection — or empty/error states */}
         {data === null ? (
           <div className="py-12 text-center">
             <p className="text-sm text-text-muted">Failed to load hunts</p>
@@ -205,7 +92,7 @@ export default async function HuntsPage({ searchParams }: PageProps) {
             )}
           </div>
         ) : (
-          hunts.map((hunt, i) => <HuntRow key={hunt.id} hunt={hunt} index={i} />)
+          <BulkHuntManager hunts={hunts} />
         )}
       </div>
 
