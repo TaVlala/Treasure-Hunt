@@ -152,7 +152,7 @@
 - [x] Sponsor self-serve portal — SPONSOR role + User→Sponsor link, register/login endpoints, GET /sponsor/me+clues+analytics+subscription+prizes, /sponsor/login+register+dashboard+prizes pages; dashboard/prizes nav
 - [ ] Advanced analytics dashboards
 - [ ] A/B test hunt variations
-- [ ] Bulk hunt management
+- [x] Bulk hunt management
 
 ### Mobile App
 - [x] App Store submission prep — eas.json (dev/preview/production profiles), app.json (full metadata + permissions + runtimeVersion), STORE_LISTING.md (ready-to-paste copy + submission checklist)

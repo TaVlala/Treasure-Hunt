@@ -14,7 +14,7 @@ hunt tickets, and tourism board contracts.
 
 ## Current Phase: Phase 3 — Scale & Revenue
 
-**Status:** Phases 1 + 2 + Phase 3 Tracks A/B/C all merged to main. Current branch: `main`.
+**Status:** Phases 1 + 2 + Phase 3 ALL COMPLETE ✅. Current branch: `main`.
 
 **Last completed chunk:** Analytics + Team Play + Admin Prize Manager (parallel agents):
 - `analytics.admin.routes.ts`: GET /admin/analytics (overall event stats), GET /admin/analytics/hunts/:huntId (funnel). `game.routes.ts`: fire-and-forget CLUE_FOUND + HUNT_COMPLETE analytics events recorded in submit handler.
@@ -67,6 +67,12 @@ hunt tickets, and tourism board contracts.
 - **Chunk 2**: sponsor/dashboard billing section (subscribe/manage buttons, status badge, next billing date, cancelAtPeriodEnd warning); admin `sponsors/[id]` subscription badge; `sponsor.admin.routes.ts` GET /:id returns subscription
 - TypeScript: 0 errors. Branch: `feature/phase3-sponsor-portal`
 - **Stripe Billing COMPLETE ✅**
+
+**Last completed chunk:** Bulk hunt management (branch: `feature/bulk-hunt-management`):
+- `hunt.admin.routes.ts`: `POST /admin/hunts/bulk` — validates ids (non-empty, max 50) + action (publish/archive/duplicate); publish → `updateMany` status ACTIVE; archive → `updateMany` status ARCHIVED; duplicate → clones each hunt + clues with PostGIS `$executeRaw`
+- `BulkHuntManager.tsx`: client component with `Set<string>` selection state; per-row checkboxes; select-all header; floating `BulkActionBar` (fixed bottom, Publish/Archive/Duplicate/Clear); single per-row `SingleDuplicateButton` preserved
+- `hunts/page.tsx`: replaced static row map with `<BulkHuntManager hunts={hunts} />`
+- TypeScript: 0 errors. Merged to main. **Phase 3 COMPLETE ✅**
 
 **Last completed chunk:** Player retention cohort analytics (branch: `feature/retention-analytics`):
 - `analytics.admin.routes.ts`: `GET /admin/analytics/retention` — raw SQL weekly cohort query (`date_trunc('week', ...)`, player's first session = cohort week, join active weeks); returns 12×12 rate matrix, null for future weeks; `avgWeek1Retention` + `avgWeek2Retention` summary
