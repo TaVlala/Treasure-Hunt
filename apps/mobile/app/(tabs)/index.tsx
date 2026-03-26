@@ -18,6 +18,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { playerFetch } from '@/lib/api';
+import { Fonts } from '@/lib/theme';
+import { DotBadge, PriceBadge, Badge } from '@/components/ui/Badge';
 import type { Hunt, PaginatedData } from '@treasure-hunt/shared';
 import MapboxGL from '@rnmapbox/maps';
 
@@ -92,12 +94,10 @@ function HuntCard({ hunt, onPress }: { hunt: HuntWithCount; onPress: () => void 
       <View style={styles.cardBody}>
         {/* Top row: city + price badge */}
         <View style={styles.cardTopRow}>
-          <Text style={styles.cardCity}>{hunt.city}{hunt.region ? `, ${hunt.region}` : ''}</Text>
-          <View style={[styles.badge, isFree ? styles.badgeFree : styles.badgePaid]}>
-            <Text style={[styles.badgeText, isFree ? styles.badgeFreeText : styles.badgePaidText]}>
-              {priceLabel(hunt)}
-            </Text>
-          </View>
+          <Text style={styles.cardCity} numberOfLines={1}>
+            {hunt.city}{hunt.region ? `, ${hunt.region}` : ''}
+          </Text>
+          <PriceBadge label={priceLabel(hunt)} isFree={isFree} />
         </View>
 
         {/* Title */}
@@ -108,27 +108,11 @@ function HuntCard({ hunt, onPress }: { hunt: HuntWithCount; onPress: () => void 
 
         {/* Bottom row: tags */}
         <View style={styles.cardFooter}>
-          {/* Difficulty */}
-          <View style={[styles.tag, { borderColor: diff.color + '55' }]}>
-            <View style={[styles.tagDot, { backgroundColor: diff.color }]} />
-            <Text style={[styles.tagText, { color: diff.color }]}>{diff.label}</Text>
-          </View>
-
-          {/* Theme */}
-          <View style={styles.tag}>
-            <Text style={styles.tagText}>{themeLabel(hunt.theme)}</Text>
-          </View>
-
-          {/* Clue count */}
-          <View style={styles.tag}>
-            <Text style={styles.tagText}>{hunt.clueCount} clue{hunt.clueCount !== 1 ? 's' : ''}</Text>
-          </View>
-
-          {/* Time limit if set */}
+          <DotBadge label={diff.label} color={diff.color} />
+          <Badge label={themeLabel(hunt.theme)} color={MUTED} />
+          <Badge label={`${hunt.clueCount} clue${hunt.clueCount !== 1 ? 's' : ''}`} color={MUTED} />
           {hunt.timeLimitMinutes != null && (
-            <View style={styles.tag}>
-              <Text style={styles.tagText}>{hunt.timeLimitMinutes}m</Text>
-            </View>
+            <Badge label={`${hunt.timeLimitMinutes}m`} color={MUTED} />
           )}
         </View>
       </View>
@@ -503,13 +487,13 @@ const styles = StyleSheet.create({
     color: ACCENT,
     fontSize: 9,
     letterSpacing: 4,
-    fontWeight: '700',
+    fontFamily: Fonts.bodySemi,
     textTransform: 'uppercase',
   },
   greeting: {
     color: TEXT,
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: Fonts.display,
     marginTop: 2,
     letterSpacing: -0.3,
   },
@@ -632,7 +616,7 @@ const styles = StyleSheet.create({
   listHeader: {
     color: MUTED,
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: Fonts.bodySemi,
     letterSpacing: 0.5,
     marginBottom: 6,
     textTransform: 'uppercase',
@@ -673,8 +657,8 @@ const styles = StyleSheet.create({
   cardCity: {
     color: MUTED,
     fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 0.3,
+    fontFamily: Fonts.bodySemi,
+    letterSpacing: 0.5,
     textTransform: 'uppercase',
     flex: 1,
     marginRight: 8,
@@ -682,14 +666,15 @@ const styles = StyleSheet.create({
   cardTitle: {
     color: TEXT,
     fontSize: 17,
-    fontWeight: '700',
+    fontFamily: Fonts.display,
     letterSpacing: -0.3,
     marginBottom: 6,
   },
   cardDesc: {
     color: MUTED,
     fontSize: 13,
-    lineHeight: 19,
+    fontFamily: Fonts.body,
+    lineHeight: 20,
     marginBottom: 12,
   },
   cardFooter: {
@@ -766,13 +751,14 @@ const styles = StyleSheet.create({
   errorTitle: {
     color: TEXT,
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: Fonts.display,
     marginBottom: 8,
     letterSpacing: -0.3,
   },
   errorBody: {
     color: MUTED,
     fontSize: 14,
+    fontFamily: Fonts.body,
     textAlign: 'center',
     lineHeight: 20,
     marginBottom: 24,
@@ -781,7 +767,7 @@ const styles = StyleSheet.create({
   emptyTitle: {
     color: TEXT,
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: Fonts.display,
     marginBottom: 8,
     letterSpacing: -0.3,
     textAlign: 'center',
@@ -789,19 +775,20 @@ const styles = StyleSheet.create({
   emptyBody: {
     color: MUTED,
     fontSize: 14,
+    fontFamily: Fonts.body,
     textAlign: 'center',
     lineHeight: 20,
     marginBottom: 24,
   },
   retryBtn: {
     backgroundColor: ACCENT,
-    borderRadius: 10,
+    borderRadius: 100,
     paddingHorizontal: 24,
-    paddingVertical: 12,
+    paddingVertical: 13,
   },
   retryText: {
     color: '#000',
-    fontWeight: '700',
+    fontFamily: Fonts.bodySemi,
     fontSize: 14,
   },
 

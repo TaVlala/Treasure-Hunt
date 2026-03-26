@@ -69,10 +69,10 @@
 - [x] Hunt completion screen (animated score, stat grid, rank badge, leaderboard CTA)
 
 ### Design System
-- [ ] Typography selection (display + body fonts)
-- [ ] Color palette finalized
-- [ ] Button components (pill-shaped, bold)
-- [ ] Card components (hunt card, sponsor card, clue card)
+- [x] Typography selection — Space Grotesk (display/headings) + Inter (body/labels) loaded via expo-font
+- [x] Color palette finalized — centralized in apps/mobile/lib/theme.ts (Colors, Fonts, FontSize, Spacing, Radius)
+- [x] Button components — apps/mobile/components/ui/Button.tsx (primary/secondary/ghost/danger, pill-shaped, loading state)
+- [x] Card components — HuntCard in discover screen uses DotBadge + PriceBadge; Badge.tsx covers difficulty/price/status
 - [ ] Map styling (custom Mapbox style)
 
 ---
@@ -115,7 +115,7 @@
 - [x] Paid ticket purchase (Stripe Checkout — "Buy Ticket" → browser → poll for session → navigate)
 - [x] Team creation + join flow — /team/create and /team/join screens; team options shown after joining a TEAM/BOTH mode hunt
 - [x] All clue types — IMAGE renders imageUrl, TEXT_RIDDLE shows answer input, PHOTO_CHALLENGE uses expo-image-picker + GPS gate; photo method added to submit schema + FoundMethod enum
-- [ ] Hint system (costs points)
+- [x] Hint system (costs points) — fully implemented: POST /hint endpoint deducts 5pts, onRevealHint() in active.tsx, hintAlreadyUsed state, session restore
 - [x] Prize gallery (prize cards on completion screen, grand prize highlight, "Claim Prize" CTA)
 - [x] Prize detail screen (sponsor info, how-to-redeem, QR placeholder)
 - [x] Prize redemption QR screen (tap-to-generate QR, white QR card, redeemed/expired status badges)

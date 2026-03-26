@@ -44,8 +44,8 @@ export default function TabsLayout() {
         tabBarInactiveTintColor: MUTED,
         tabBarLabelStyle: {
           fontSize: 10,
-          fontWeight: '600',
-          letterSpacing: 0.5,
+          fontFamily: 'Inter_600SemiBold',
+          letterSpacing: 0.6,
           textTransform: 'uppercase',
         },
       }}
