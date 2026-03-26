@@ -42,6 +42,11 @@ const envSchema = z.object({
   // Redis — optional; required for BullMQ background job queues
   REDIS_URL: z.string().optional(),
 
+  // Sentry — optional; enables error tracking and performance monitoring in production
+  SENTRY_DSN: z.string().url().optional(),
+  // Sample rate 0.0–1.0 for performance traces (default 10% in prod to control quota)
+  SENTRY_TRACES_SAMPLE_RATE: z.string().default('0.1').transform(Number),
+
   // CORS — origins allowed to call the API
   ALLOWED_ORIGINS: z.string().default('http://localhost:3000,http://localhost:8081'),
 });

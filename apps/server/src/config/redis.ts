@@ -4,6 +4,7 @@
 
 import Redis from 'ioredis';
 import { env } from './env';
+import { logger } from '../lib/logger';
 
 // Lazily created connection — only instantiated if REDIS_URL is set
 let _redis: Redis | null = null;
@@ -18,12 +19,12 @@ export function getRedis(): Redis | null {
       enableReadyCheck: false,
     });
 
-    _redis.on('error', (err) => {
-      console.error('Redis connection error:', err);
+    _redis.on('error', (err: Error) => {
+      logger.error({ err }, 'Redis connection error');
     });
 
     _redis.on('connect', () => {
-      console.log('✅ Redis connected');
+      logger.info('Redis connected');
     });
   }
 

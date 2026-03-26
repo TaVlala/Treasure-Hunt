@@ -5,11 +5,15 @@
 import 'dotenv/config';
 import { env } from './config/env';
 import { prisma } from './config/database';
+import { logger } from './lib/logger';
+import { initSentry, setupSentryErrorHandler, sentryErrorHandler } from './lib/sentry';
 
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
+import pinoHttp from 'pino-http';
+import { requestId } from './middleware/requestId';
 import { authLimiter, gameLimiter, generalLimiter } from './middleware/rateLimiter';
 import { sanitiseInput } from './middleware/sanitise';
 import { createBullBoard } from '@bull-board/api';
@@ -40,7 +44,32 @@ import { errorHandler } from './middleware/errorHandler';
 
 const app = express();
 
+// Initialise Sentry before any routes (instruments Express request spans)
+initSentry(app);
+
 // --- Middleware ---
+
+// Stamp every request with a unique UUID — echoed in X-Request-Id response header
+app.use(requestId);
+
+// Structured HTTP request logging via pino-http.
+// Picks up req.id set by requestId middleware so log lines share the same request id.
+app.use(
+  pinoHttp({
+    logger,
+    // Attach requestId so log lines are correlatable
+    genReqId: (req) => req.id,
+    // Suppress noisy health-check logs in production
+    autoLogging: {
+      ignore: (req) => req.url === '/health',
+    },
+    customLogLevel: (_req, res) => {
+      if (res.statusCode >= 500) return 'error';
+      if (res.statusCode >= 400) return 'warn';
+      return 'info';
+    },
+  }),
+);
 
 // Security headers — sets X-Content-Type-Options, X-Frame-Options, HSTS, CSP, etc.
 // Registered first so every response gets security headers, including errors.
@@ -155,12 +184,18 @@ if (analyticsQ || emailQ || cleanupQ) {
     next();
   }, serverAdapter.getRouter());
 
-  console.log('✅ Bull Board mounted at /bull-board');
+  logger.info('Bull Board mounted at /bull-board');
 }
 
 // --- Error handling ---
 
-// Must be registered AFTER all routes
+// Sentry must be set up (via setupExpressErrorHandler) AFTER all routes are registered
+setupSentryErrorHandler(app);
+
+// Request-ID-aware Sentry error capture middleware (handles non-Express-error-handler paths)
+app.use(sentryErrorHandler);
+
+// Custom error handler — formats AppError and unhandled errors into a consistent JSON response
 app.use(errorHandler);
 
 // --- Start workers ---
@@ -175,23 +210,24 @@ void startCleanupWorker();
 // --- Start server ---
 
 const server = app.listen(env.PORT, () => {
-  console.log(`✅ Treasure Hunt API running on http://localhost:${env.PORT}`);
-  console.log(`   Environment: ${env.NODE_ENV}`);
-  console.log(`   Health check: http://localhost:${env.PORT}/health`);
+  logger.info(
+    { port: env.PORT, env: env.NODE_ENV },
+    `Treasure Hunt API running on http://localhost:${env.PORT}`,
+  );
 });
 
 // --- Graceful shutdown ---
 
 // Disconnect Prisma cleanly so DB connections are not left dangling
 const shutdown = async (signal: string) => {
-  console.log(`\n${signal} received — shutting down gracefully...`);
+  logger.info({ signal }, 'Shutting down gracefully…');
 
   // Close BullMQ workers first so in-flight jobs complete
   await Promise.allSettled([analyticsWorker?.close(), emailWorker?.close()]);
 
   server.close(async () => {
     await prisma.$disconnect();
-    console.log('   ✅ DB connection closed');
+    logger.info('DB connection closed — process exiting');
     process.exit(0);
   });
 };
