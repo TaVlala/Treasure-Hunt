@@ -41,7 +41,7 @@ export default function AboutPage() {
           How Treasure Hunt Works
         </h1>
         <p className="text-white/40 text-base leading-relaxed max-w-md mx-auto">
-          For players who want to explore and win. For businesses who want customers through the door.
+          Everything you need to know about playing, winning, and getting in touch.
         </p>
       </div>
 
@@ -75,52 +75,10 @@ export default function AboutPage() {
       </section>
 
       {/* Divider */}
-      <div className="border-t border-white/[0.06] mb-16" />
-
-      {/* Business / Sponsor section */}
-      <section className="mb-16">
-        <p className="text-xs uppercase tracking-widest text-white/25 font-medium mb-6">
-          For Businesses
-        </p>
-        <div className="bg-white/[0.03] border border-white/[0.07] rounded-2xl p-8">
-          <div className="text-3xl mb-4">🏪</div>
-          <h2 className="text-white font-bold text-2xl mb-3">Partner with us</h2>
-          <p className="text-white/50 text-base leading-relaxed mb-6">
-            Place a branded clue at your location. Tourists visit. You gain customers. Sponsors receive
-            dedicated foot traffic, brand visibility, and measurable engagement — all tracked in real time.
-          </p>
-          <ul className="space-y-2 mb-8 text-white/40 text-sm">
-            <li className="flex items-start gap-2">
-              <span className="text-amber-400 mt-0.5">✓</span>
-              Branded clue at your venue drives guaranteed foot traffic
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-amber-400 mt-0.5">✓</span>
-              Prize redemptions bring customers to your counter
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-amber-400 mt-0.5">✓</span>
-              Analytics dashboard shows visits, completions, and redemptions
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-amber-400 mt-0.5">✓</span>
-              Tourism-board partnerships available for city-wide hunts
-            </li>
-          </ul>
-          <Link
-            href="mailto:hello@treasurehunt.app"
-            className="inline-flex items-center gap-2 bg-amber-400 hover:bg-amber-300 text-black font-semibold px-6 py-3 rounded-full transition-colors text-sm"
-          >
-            Contact us to become a sponsor →
-          </Link>
-        </div>
-      </section>
-
-      {/* Divider */}
       <div className="border-t border-white/[0.06] mb-4" />
 
-      {/* FAQ */}
-      <section>
+      {/* FAQ — players only */}
+      <section className="mb-16">
         <p className="text-xs uppercase tracking-widest text-white/25 font-medium mb-2">
           FAQ
         </p>
@@ -143,7 +101,7 @@ export default function AboutPage() {
       </section>
 
       {/* CTA to discover */}
-      <div className="mt-16 text-center">
+      <div className="mb-20 text-center">
         <Link
           href="/discover"
           className="inline-flex items-center gap-2 bg-amber-400 hover:bg-amber-300 text-black font-semibold px-8 py-3.5 rounded-full transition-colors text-sm"
@@ -151,6 +109,49 @@ export default function AboutPage() {
           Browse Active Hunts →
         </Link>
       </div>
+
+      {/* Divider */}
+      <div className="border-t border-white/[0.06] mb-16" />
+
+      {/* Contact Us — two columns */}
+      <section>
+        <p className="text-xs uppercase tracking-widest text-white/25 font-medium mb-8">
+          Contact Us
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+
+          {/* For Players */}
+          <div className="bg-white/[0.03] border border-white/[0.07] rounded-2xl p-6">
+            <div className="text-2xl mb-3">🙋</div>
+            <h3 className="text-white font-semibold text-base mb-2">For Players</h3>
+            <p className="text-white/40 text-sm leading-relaxed mb-5">
+              Questions about a hunt, prizes, your account, or the app? We're happy to help.
+            </p>
+            <Link
+              href="mailto:support@treasurehunt.app"
+              className="inline-flex items-center gap-1.5 text-amber-400 hover:text-amber-300 text-sm font-medium transition-colors"
+            >
+              support@treasurehunt.app →
+            </Link>
+          </div>
+
+          {/* For Businesses */}
+          <div className="bg-white/[0.03] border border-white/[0.07] rounded-2xl p-6">
+            <div className="text-2xl mb-3">🏪</div>
+            <h3 className="text-white font-semibold text-base mb-2">For Businesses</h3>
+            <p className="text-white/40 text-sm leading-relaxed mb-5">
+              Interested in becoming a sponsor? Place a branded clue at your venue and drive real foot traffic.
+            </p>
+            <Link
+              href="mailto:sponsors@treasurehunt.app"
+              className="inline-flex items-center gap-1.5 text-amber-400 hover:text-amber-300 text-sm font-medium transition-colors"
+            >
+              sponsors@treasurehunt.app →
+            </Link>
+          </div>
+
+        </div>
+      </section>
 
     </div>
   );

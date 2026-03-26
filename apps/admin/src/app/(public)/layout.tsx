@@ -13,12 +13,17 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
           <Link href="/" className="text-xs uppercase tracking-widest font-semibold text-amber-400">
             Treasure Hunt
           </Link>
-          <Link
-            href="/login"
-            className="text-xs font-medium text-white/70 hover:text-white border border-white/20 hover:border-white/40 px-4 py-1.5 rounded-full transition-colors"
-          >
-            Admin Login
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link href="/player/login" className="text-xs font-medium text-white/60 hover:text-white transition-colors">
+              Sign In
+            </Link>
+            <Link
+              href="/player/register"
+              className="text-xs font-semibold bg-amber-400 hover:bg-amber-300 text-black px-4 py-1.5 rounded-full transition-colors"
+            >
+              Get Started
+            </Link>
+          </div>
         </div>
       </nav>
 
