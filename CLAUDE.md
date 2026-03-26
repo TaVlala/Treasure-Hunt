@@ -68,6 +68,12 @@ hunt tickets, and tourism board contracts.
 - TypeScript: 0 errors. Branch: `feature/phase3-sponsor-portal`
 - **Stripe Billing COMPLETE ✅**
 
+**Last completed chunk:** Sponsor prize portal:
+- `sponsor.portal.routes.ts`: `GET /sponsor/prizes` — returns all SponsorPrize records with hunt context and live `_count.redemptions`
+- `apps/admin/src/app/sponsor/prizes/page.tsx`: read-only prize list grouped by hunt; type badge (Discount/Free Item/Experience); redemption progress bar; grand prize indicator; expiry with red highlight if past
+- `apps/admin/src/app/sponsor/dashboard/page.tsx`: Dashboard/Prizes nav links added to header
+- TypeScript: 0 errors. Branch: `feature/phase3-sponsor-portal`
+
 **Previous completed chunk (Phase 3 Track C — chunk 2):** Background jobs (BullMQ):
 - `config/redis.ts`: lazy ioredis connection; graceful close; no-op when `REDIS_URL` absent
 - `queues/index.ts`: `analyticsQueue` / `emailQueue` / `cleanupQueue`; typed payloads; `enqueueAnalytics()` + `enqueueEmail()` helpers with DB/silent fallback
