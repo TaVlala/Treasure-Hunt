@@ -19,6 +19,23 @@ const TIER_STYLES: Record<string, string> = {
   prize: 'text-purple-400 bg-purple-400/10',
 };
 
+const SUB_STYLES: Record<string, string> = {
+  active:     'text-green-400 bg-green-400/10',
+  past_due:   'text-yellow-400 bg-yellow-400/10',
+  cancelled:  'text-red-400 bg-red-400/10',
+  incomplete: 'text-[#888] bg-surface-2',
+  trialing:   'text-blue-400 bg-blue-400/10',
+};
+
+// The GET /:id endpoint returns SponsorDetail extended with subscription status
+interface SponsorDetailWithSub extends SponsorDetail {
+  subscription: {
+    status: string;
+    currentPeriodEnd: string;
+    cancelAtPeriodEnd: boolean;
+  } | null;
+}
+
 interface PageProps {
   params: Promise<{ id: string }>;
 }
@@ -26,13 +43,16 @@ interface PageProps {
 export default async function SponsorDetailPage({ params }: PageProps) {
   const { id } = await params;
 
-  const sponsor = await serverFetch<SponsorDetail>(`/api/v1/admin/sponsors/${id}`);
+  const sponsor = await serverFetch<SponsorDetailWithSub>(`/api/v1/admin/sponsors/${id}`);
 
   // 404 if sponsor doesn't exist or auth failed
   if (!sponsor) notFound();
 
   const statusStyle = STATUS_STYLES[sponsor.status] ?? 'text-text-muted bg-surface-2';
   const tierStyle = TIER_STYLES[sponsor.tier] ?? 'text-text-muted bg-surface-2';
+  const subStyle = sponsor.subscription
+    ? (SUB_STYLES[sponsor.subscription.status] ?? 'text-[#888] bg-surface-2')
+    : null;
 
   return (
     <div className="p-8 max-w-3xl">
@@ -60,8 +80,8 @@ export default async function SponsorDetailPage({ params }: PageProps) {
             </p>
           </div>
 
-          {/* Tier + status badges */}
-          <div className="flex items-center gap-2 shrink-0">
+          {/* Tier + status + subscription badges */}
+          <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
             <span
               className={`
                 text-[10px] uppercase tracking-widest font-medium
@@ -78,6 +98,17 @@ export default async function SponsorDetailPage({ params }: PageProps) {
             >
               {sponsor.status}
             </span>
+            {subStyle && sponsor.subscription && (
+              <span
+                className={`
+                  text-[10px] uppercase tracking-widest font-medium
+                  px-2.5 py-1 rounded-full ${subStyle}
+                `}
+                title={`Subscription ${sponsor.subscription.status}${sponsor.subscription.cancelAtPeriodEnd ? ' · cancels at period end' : ''}`}
+              >
+                sub: {sponsor.subscription.status.replace('_', ' ')}
+              </span>
+            )}
           </div>
         </div>
       </div>

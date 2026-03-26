@@ -142,8 +142,20 @@ async function setSponsorLocation(sponsorId: string, lat: number, lng: number): 
   `;
 }
 
-// The include used on every query — returns _count for clueCount in response
+// The include used on list queries — returns _count for clueCount in response
 const WITH_COUNT = { _count: { select: { sponsorClues: true } } } as const;
+
+// The include used on single-sponsor fetches — also includes subscription status
+const WITH_COUNT_AND_SUB = {
+  _count: { select: { sponsorClues: true } },
+  subscription: {
+    select: {
+      status: true,
+      currentPeriodEnd: true,
+      cancelAtPeriodEnd: true,
+    },
+  },
+} as const;
 
 // ---------------------------------------------------------------------------
 // Routes
@@ -212,24 +224,32 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   }
 });
 
-// GET /:id — Get a single sponsor with linked clue count
+// GET /:id — Get a single sponsor with linked clue count + subscription status
 router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const id = req.params['id'] as string;
 
     const sponsor = await prisma.sponsor.findUnique({
       where: { id },
-      include: WITH_COUNT,
+      include: WITH_COUNT_AND_SUB,
     });
 
     if (!sponsor) {
       throw new AppError('Sponsor not found', 404, 'NOT_FOUND');
     }
 
-    const response: ApiSuccess<SponsorDetail> = {
-      success: true,
-      data: toSponsorResponse(sponsor),
+    const data = {
+      ...toSponsorResponse(sponsor),
+      subscription: sponsor.subscription
+        ? {
+            status: sponsor.subscription.status.toLowerCase(),
+            currentPeriodEnd: sponsor.subscription.currentPeriodEnd.toISOString(),
+            cancelAtPeriodEnd: sponsor.subscription.cancelAtPeriodEnd,
+          }
+        : null,
     };
+
+    const response: ApiSuccess<typeof data> = { success: true, data };
     res.status(200).json(response);
   } catch (err) {
     next(err);

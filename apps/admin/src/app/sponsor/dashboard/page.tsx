@@ -51,6 +51,18 @@ interface SponsoredClue {
   visitCount: number;
 }
 
+interface SubscriptionData {
+  hasSubscription: boolean;
+  monthlyFeeCents: number | null;
+  hasBillingAccount: boolean;
+  subscription: {
+    id: string;
+    status: string;
+    currentPeriodEnd: string;
+    cancelAtPeriodEnd: boolean;
+  } | null;
+}
+
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
@@ -134,6 +146,9 @@ export default function SponsorDashboardPage() {
   const [profile, setProfile] = useState<SponsorProfile | null>(null);
   const [analytics, setAnalytics] = useState<SponsorAnalytics | null>(null);
   const [clues, setClues] = useState<SponsoredClue[]>([]);
+  const [billing, setBilling] = useState<SubscriptionData | null>(null);
+  const [subscribeLoading, setSubscribeLoading] = useState(false);
+  const [billingPortalLoading, setBillingPortalLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -157,13 +172,14 @@ export default function SponsorDashboardPage() {
 
     const headers = { Authorization: `Bearer ${parsed.accessToken}` };
 
-    // Fetch all three in parallel
+    // Fetch all four in parallel
     Promise.all([
       fetch(`${API_URL}/api/v1/sponsor/me`, { headers, cache: 'no-store' }),
       fetch(`${API_URL}/api/v1/sponsor/analytics`, { headers, cache: 'no-store' }),
       fetch(`${API_URL}/api/v1/sponsor/clues`, { headers, cache: 'no-store' }),
+      fetch(`${API_URL}/api/v1/sponsor/subscription`, { headers, cache: 'no-store' }),
     ])
-      .then(async ([meRes, analyticsRes, cluesRes]) => {
+      .then(async ([meRes, analyticsRes, cluesRes, subRes]) => {
         // If any 401 → session expired
         if (meRes.status === 401 || analyticsRes.status === 401) {
           localStorage.removeItem('sponsor_session');
@@ -171,15 +187,17 @@ export default function SponsorDashboardPage() {
           return;
         }
 
-        const [meData, analyticsData, cluesData] = await Promise.all([
-          meRes.ok ? (meRes.json() as Promise<SponsorProfile>) : Promise.resolve(null),
-          analyticsRes.ok ? (analyticsRes.json() as Promise<SponsorAnalytics>) : Promise.resolve(null),
-          cluesRes.ok ? (cluesRes.json() as Promise<SponsoredClue[]>) : Promise.resolve([]),
+        const [meJson, analyticsJson, cluesJson, subJson] = await Promise.all([
+          meRes.ok ? meRes.json() : Promise.resolve(null),
+          analyticsRes.ok ? analyticsRes.json() : Promise.resolve(null),
+          cluesRes.ok ? cluesRes.json() : Promise.resolve({ data: [] }),
+          subRes.ok ? subRes.json() : Promise.resolve(null),
         ]);
 
-        setProfile(meData);
-        setAnalytics(analyticsData);
-        setClues(cluesData ?? []);
+        setProfile(meJson as SponsorProfile | null);
+        setAnalytics(analyticsJson as SponsorAnalytics | null);
+        setClues((cluesJson as { data?: SponsoredClue[] })?.data ?? []);
+        setBilling((subJson as { data?: SubscriptionData })?.data ?? null);
       })
       .catch(() => setError('Failed to load dashboard data.'))
       .finally(() => setLoading(false));
@@ -339,6 +357,46 @@ export default function SponsorDashboardPage() {
           </div>
         </section>
 
+        {/* Billing section */}
+        <BillingSection
+          billing={billing}
+          session={session}
+          monthlyFee={monthlyFee}
+          subscribeLoading={subscribeLoading}
+          billingPortalLoading={billingPortalLoading}
+          onSubscribe={async () => {
+            if (!session) return;
+            setSubscribeLoading(true);
+            try {
+              const res = await fetch(`${API_URL}/api/v1/stripe/sponsor/subscribe`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${session.accessToken}` },
+              });
+              const json = await res.json() as { success: boolean; data?: { checkoutUrl: string } };
+              if (json.success && json.data?.checkoutUrl) {
+                window.location.href = json.data.checkoutUrl;
+              }
+            } finally {
+              setSubscribeLoading(false);
+            }
+          }}
+          onManageBilling={async () => {
+            if (!session) return;
+            setBillingPortalLoading(true);
+            try {
+              const res = await fetch(`${API_URL}/api/v1/stripe/sponsor/billing-portal`, {
+                headers: { Authorization: `Bearer ${session.accessToken}` },
+              });
+              const json = await res.json() as { success: boolean; data?: { portalUrl: string } };
+              if (json.success && json.data?.portalUrl) {
+                window.location.href = json.data.portalUrl;
+              }
+            } finally {
+              setBillingPortalLoading(false);
+            }
+          }}
+        />
+
         {/* Account section */}
         <section>
           <h2 className="text-xs uppercase tracking-widest text-[#888] font-medium mb-4">
@@ -365,6 +423,108 @@ export default function SponsorDashboardPage() {
 
       </main>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Billing section — subscription status + subscribe / manage buttons
+// ---------------------------------------------------------------------------
+
+const SUB_STATUS_STYLES: Record<string, string> = {
+  active:     'text-green-400 bg-green-400/10 border-green-400/20',
+  past_due:   'text-yellow-400 bg-yellow-400/10 border-yellow-400/20',
+  cancelled:  'text-red-400 bg-red-400/10 border-red-400/20',
+  incomplete: 'text-[#888] bg-[#1c1c1c] border-[#333]',
+  trialing:   'text-blue-400 bg-blue-400/10 border-blue-400/20',
+};
+
+function BillingSection({
+  billing,
+  session,
+  monthlyFee,
+  subscribeLoading,
+  billingPortalLoading,
+  onSubscribe,
+  onManageBilling,
+}: {
+  billing: SubscriptionData | null;
+  session: SponsorSession | null;
+  monthlyFee: string;
+  subscribeLoading: boolean;
+  billingPortalLoading: boolean;
+  onSubscribe: () => void;
+  onManageBilling: () => void;
+}) {
+  const sub = billing?.subscription;
+  const statusKey = sub?.status ?? '';
+  const statusStyle = SUB_STATUS_STYLES[statusKey] ?? 'text-[#888] bg-[#1c1c1c] border-[#333]';
+
+  return (
+    <section>
+      <h2 className="text-xs uppercase tracking-widest text-[#888] font-medium mb-4">
+        Billing
+      </h2>
+
+      <div className="bg-[#141414] border border-[#242424] rounded-xl p-6 space-y-5">
+
+        {/* Status row */}
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm text-white font-medium">
+              {billing?.hasSubscription ? 'Subscription active' : 'No active subscription'}
+            </p>
+            {sub && (
+              <p className="text-xs text-[#555] mt-0.5">
+                Next billing: {formatDate(sub.currentPeriodEnd)}
+              </p>
+            )}
+            {!billing?.hasSubscription && billing?.monthlyFeeCents && (
+              <p className="text-xs text-[#555] mt-0.5">
+                {monthlyFee} · billed monthly
+              </p>
+            )}
+          </div>
+
+          {sub && (
+            <span className={`text-[10px] uppercase tracking-widest font-medium px-2.5 py-1 rounded-full border ${statusStyle}`}>
+              {sub.status.replace('_', ' ')}
+            </span>
+          )}
+        </div>
+
+        {/* Cancel-at-period-end warning */}
+        {sub?.cancelAtPeriodEnd && (
+          <div className="bg-yellow-400/5 border border-yellow-400/20 rounded-lg px-4 py-3">
+            <p className="text-xs text-yellow-400">
+              ⚠️ Your subscription will cancel on {formatDate(sub.currentPeriodEnd)}. Reactivate in billing settings before then to avoid losing access.
+            </p>
+          </div>
+        )}
+
+        {/* CTA buttons */}
+        <div className="flex flex-wrap gap-3 pt-1">
+          {!billing?.hasSubscription && billing?.monthlyFeeCents && session && (
+            <button
+              onClick={onSubscribe}
+              disabled={subscribeLoading}
+              className="px-5 py-2.5 rounded-lg bg-[#f59e0b] hover:bg-[#d97706] text-black text-sm font-medium transition-colors disabled:opacity-50"
+            >
+              {subscribeLoading ? 'Redirecting…' : `Subscribe for ${monthlyFee}`}
+            </button>
+          )}
+
+          {billing?.hasBillingAccount && (
+            <button
+              onClick={onManageBilling}
+              disabled={billingPortalLoading}
+              className="px-5 py-2.5 rounded-lg border border-[#333] hover:border-[#555] text-[#888] hover:text-white text-sm transition-colors disabled:opacity-50"
+            >
+              {billingPortalLoading ? 'Opening…' : 'Manage Billing'}
+            </button>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
 
