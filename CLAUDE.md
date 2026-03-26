@@ -57,6 +57,16 @@ hunt tickets, and tourism board contracts.
 
 **Phase 3 Track C is now COMPLETE.**
 
+**Last completed chunk:** Stripe Billing (sponsor subscriptions) — Chunk 1 Backend:
+- `prisma/schema.prisma`: `SubscriptionStatus` enum + `Subscription` model + `Sponsor.stripeCustomerId`
+- `stripe.routes.ts`: `POST /stripe/sponsor/subscribe` (Checkout Session, subscription mode, price_data), `GET /stripe/sponsor/billing-portal` (Billing Portal URL); both require SPONSOR JWT
+- Webhook: `checkout.session.completed` (subscription) → `upsertSubscription`; `customer.subscription.updated/deleted`; `invoice.paid` → Payment (SPONSOR_FEE) + period date update; `invoice.payment_failed` → email
+- SDK v20 compat: period dates from `sub.start_date` (not `current_period_start`); sub ID from `invoice.parent.subscription_details.subscription`
+- `sponsor.portal.routes.ts`: `GET /sponsor/subscription` — status, period, hasBillingAccount
+- `packages/shared/src/types/sponsor.ts`: `SubscriptionStatus` + `Subscription` types
+- TypeScript: 0 errors. Branch: `feature/phase3-sponsor-portal`
+- **Chunk 2 pending**: Admin billing UI (sponsor subscription status card, subscribe/portal buttons)
+
 **Previous completed chunk (Phase 3 Track C — chunk 2):** Background jobs (BullMQ):
 - `config/redis.ts`: lazy ioredis connection; graceful close; no-op when `REDIS_URL` absent
 - `queues/index.ts`: `analyticsQueue` / `emailQueue` / `cleanupQueue`; typed payloads; `enqueueAnalytics()` + `enqueueEmail()` helpers with DB/silent fallback
