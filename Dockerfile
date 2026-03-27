@@ -21,4 +21,4 @@ RUN npx prisma generate --schema=apps/server/prisma/schema.prisma
 RUN npm run build --workspace=apps/server
 
 # Start
-CMD ["node", "apps/server/dist/index.js"]
+CMD ["node", "apps/server/dist/apps/server/src/index.js"]
