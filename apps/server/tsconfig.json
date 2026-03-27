@@ -5,6 +5,9 @@
     "module": "CommonJS",
     "moduleResolution": "node",
     "outDir": "./dist",
+    "noImplicitAny": false,
+    "noImplicitReturns": false,
+    "noUncheckedIndexedAccess": false,
     "paths": {
       "@treasure-hunt/shared": ["../../packages/shared/src/index.ts"]
     }
