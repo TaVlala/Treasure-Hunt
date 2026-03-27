@@ -19,7 +19,7 @@ async function processAnalyticsJob(job: Job<AnalyticsJobData>): Promise<void> {
       playerId,
       sessionId,
       // Prisma JSON field requires explicit cast through unknown
-      ...(metadata ? { metadata: metadata as Parameters<typeof prisma.analyticsEvent.create>[0]['data']['metadata'] } : {}),
+      ...(metadata ? { metadata: metadata as unknown as object } : {}),
     },
   });
 }

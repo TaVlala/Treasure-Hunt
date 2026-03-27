@@ -116,8 +116,8 @@ export async function evaluateAchievements(
     let maxStreak = uniqueDates.length > 0 ? 1 : 0;
     let currentStreak = maxStreak;
     for (let i = 1; i < uniqueDates.length; i++) {
-      const prev = new Date(uniqueDates[i - 1]!);
-      const curr = new Date(uniqueDates[i]!);
+      const prev = new Date(uniqueDates[i - 1] as string);
+      const curr = new Date(uniqueDates[i] as string);
       const diffDays = Math.round((curr.getTime() - prev.getTime()) / 86_400_000);
       if (diffDays === 1) {
         currentStreak++;

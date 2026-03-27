@@ -3,7 +3,7 @@
 // Base path: /api/v1/admin/hunts (registered in index.ts).
 
 import { Router, Request, Response, NextFunction } from 'express';
-import { ClueType } from '@prisma/client';
+import type { ClueType } from '@prisma/client';
 import { prisma } from '../config/database';
 import { AppError } from '../middleware/errorHandler';
 import { authenticate, requireRole } from '../middleware/authenticate';
