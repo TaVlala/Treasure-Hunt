@@ -41,8 +41,11 @@ export function sanitiseInput(req: Request, _res: Response, next: NextFunction):
   }
 
   if (req.query && typeof req.query === 'object') {
-    // req.query is typed as ParsedQs — cast through unknown for the recursive pass
-    req.query = sanitiseValue(req.query) as typeof req.query;
+    // Express 5 makes req.query a read-only getter — mutate in place
+    const cleaned = sanitiseValue(req.query) as Record<string, unknown>;
+    for (const key of Object.keys(cleaned)) {
+      (req.query as Record<string, unknown>)[key] = cleaned[key];
+    }
   }
 
   // req.params is read-only at the type level but is a plain object at runtime
