@@ -1,0 +1,11 @@
+[phases.install]
+cmds = ["npm install --include=dev"]
+
+[phases.build]
+cmds = [
+  "npm run build --workspace=apps/server",
+  "npx prisma generate --schema=apps/server/prisma/schema.prisma"
+]
+
+[start]
+cmd = "node apps/server/dist/index.js"
