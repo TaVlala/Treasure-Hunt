@@ -448,7 +448,7 @@ model Payment {
 
 model PlayerAchievement {
   id            String   @id @default(uuid())
-  playerId      String   @map("player_id")
+  playerId      String   @map("player_id") @db.Uuid
   achievementId String   @map("achievement_id") @db.VarChar(50)
   earnedAt      DateTime @default(now()) @map("earned_at")
 
