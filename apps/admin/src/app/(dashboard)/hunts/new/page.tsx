@@ -7,8 +7,13 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { clientFetch } from '@/lib/api';
+import ImageUpload from '@/components/ui/ImageUpload';
 import type { Hunt } from '@treasure-hunt/shared';
+
+// MapPinPicker uses mapbox-gl which requires browser — must be dynamically imported
+const MapPinPicker = dynamic(() => import('@/components/MapPinPicker'), { ssr: false });
 
 // All number fields are stored as strings so they bind cleanly to <input>
 interface FormValues {
@@ -26,8 +31,8 @@ interface FormValues {
   maxPlayers: string;
   startsAt: string;
   endsAt: string;
-  centerLat: string;
-  centerLng: string;
+  centerLat: number | null;
+  centerLng: number | null;
   zoomLevel: string;
   ticketPrice: string; // user enters dollars; converted to cents on submit
   currency: string;
@@ -38,6 +43,7 @@ interface FormValues {
   whitelabelColor: string;
   metaTitle: string;
   metaDescription: string;
+  startMode: 'CLUE_FIRST' | 'LOCATION_FIRST';
 }
 
 const DEFAULTS: FormValues = {
@@ -55,8 +61,8 @@ const DEFAULTS: FormValues = {
   maxPlayers: '',
   startsAt: '',
   endsAt: '',
-  centerLat: '',
-  centerLng: '',
+  centerLat: null,
+  centerLng: null,
   zoomLevel: '14',
   ticketPrice: '',
   currency: 'USD',
@@ -67,13 +73,14 @@ const DEFAULTS: FormValues = {
   whitelabelColor: '',
   metaTitle: '',
   metaDescription: '',
+  startMode: 'LOCATION_FIRST',
 };
 
 // Required fields validated on Next for each step
 const STEPS = [
   { label: 'Basics', fields: ['title', 'description', 'city'] as const },
   { label: 'Settings', fields: ['difficulty'] as const },
-  { label: 'Schedule & Map', fields: ['centerLat', 'centerLng'] as const },
+  { label: 'Schedule & Map', fields: [] as const },
   { label: 'Images', fields: [] as const },
   { label: 'SEO & White-label', fields: [] as const },
 ];
@@ -84,8 +91,6 @@ const FIELD_LABELS: Partial<Record<keyof FormValues, string>> = {
   description: 'Description',
   city: 'City',
   difficulty: 'Difficulty',
-  centerLat: 'Map latitude',
-  centerLng: 'Map longitude',
 };
 
 // ---- Reusable UI primitives ----
@@ -196,7 +201,7 @@ function StepBasics({
   update,
 }: {
   form: FormValues;
-  update: (field: keyof FormValues, value: string) => void;
+  update: (field: keyof FormValues, value: string | 'CLUE_FIRST' | 'LOCATION_FIRST') => void;
 }) {
   return (
     <div className="space-y-5">
@@ -257,6 +262,31 @@ function StepBasics({
             placeholder="Georgia"
             maxLength={100}
           />
+        </div>
+      </div>
+
+      {/* Hunt start mode — determines what players see first */}
+      <div>
+        <Label>How does the hunt start?</Label>
+        <div className="grid grid-cols-2 gap-3 mt-1">
+          {([
+            { value: 'LOCATION_FIRST' as const, title: 'Location First', desc: 'Players see the starting pin on the map and navigate to it' },
+            { value: 'CLUE_FIRST' as const, title: 'Clue First', desc: 'Players receive a clue and must figure out where to go' },
+          ]).map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => update('startMode', opt.value)}
+              className={`p-4 rounded-lg border text-left transition-colors ${
+                form.startMode === opt.value
+                  ? 'border-accent bg-accent/10 text-white'
+                  : 'border-border bg-surface-2 text-text-muted hover:border-accent/50'
+              }`}
+            >
+              <p className="font-medium text-sm mb-1">{opt.title}</p>
+              <p className="text-xs opacity-70">{opt.desc}</p>
+            </button>
+          ))}
         </div>
       </div>
     </div>
@@ -408,7 +438,7 @@ function StepScheduleMap({
   update,
 }: {
   form: FormValues;
-  update: (field: keyof FormValues, value: string) => void;
+  update: (field: keyof FormValues, value: string | number | null) => void;
 }) {
   return (
     <div className="space-y-0">
@@ -436,43 +466,25 @@ function StepScheduleMap({
 
       <SectionHeader title="Map Center" />
       <p className="text-xs text-text-muted mb-4">
-        The initial map position players see when they open this hunt.
+        Click the map to set the starting position players see when they open this hunt.
       </p>
-      <div className="grid grid-cols-3 gap-4">
-        <div>
-          <Label required>Latitude</Label>
-          <input
-            type="number"
-            step="any"
-            value={form.centerLat}
-            onChange={(e) => update('centerLat', e.target.value)}
-            className={inputCls}
-            placeholder="41.6938"
-          />
-        </div>
-        <div>
-          <Label required>Longitude</Label>
-          <input
-            type="number"
-            step="any"
-            value={form.centerLng}
-            onChange={(e) => update('centerLng', e.target.value)}
-            className={inputCls}
-            placeholder="44.8015"
-          />
-        </div>
-        <div>
-          <Label>Zoom Level</Label>
-          <input
-            type="number"
-            min="1"
-            max="22"
-            value={form.zoomLevel}
-            onChange={(e) => update('zoomLevel', e.target.value)}
-            className={inputCls}
-            placeholder="14"
-          />
-        </div>
+      <MapPinPicker
+        lat={form.centerLat}
+        lng={form.centerLng}
+        onChange={(lat, lng) => { update('centerLat', lat); update('centerLng', lng); }}
+        height={320}
+      />
+      <div className="mt-4 w-28">
+        <Label>Zoom Level</Label>
+        <input
+          type="number"
+          min="1"
+          max="22"
+          value={form.zoomLevel}
+          onChange={(e) => update('zoomLevel', e.target.value)}
+          className={inputCls}
+          placeholder="14"
+        />
       </div>
     </div>
   );
@@ -486,26 +498,42 @@ function StepImages({
   update: (field: keyof FormValues, value: string) => void;
 }) {
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div>
-        <Label>Thumbnail URL</Label>
-        <input
-          type="url"
+        <ImageUpload
+          folder="hunts"
+          label="Thumbnail"
           value={form.thumbnailUrl}
-          onChange={(e) => update('thumbnailUrl', e.target.value)}
-          className={inputCls}
-          placeholder="https://…"
+          onChange={(url) => update('thumbnailUrl', url)}
         />
+        <div className="mt-2">
+          <p className="text-[10px] text-text-faint mb-1">Or paste a URL directly</p>
+          <input
+            type="url"
+            value={form.thumbnailUrl}
+            onChange={(e) => update('thumbnailUrl', e.target.value)}
+            className={inputCls}
+            placeholder="https://…"
+          />
+        </div>
       </div>
       <div>
-        <Label>Cover Image URL</Label>
-        <input
-          type="url"
+        <ImageUpload
+          folder="hunts"
+          label="Cover Image"
           value={form.coverImageUrl}
-          onChange={(e) => update('coverImageUrl', e.target.value)}
-          className={inputCls}
-          placeholder="https://…"
+          onChange={(url) => update('coverImageUrl', url)}
         />
+        <div className="mt-2">
+          <p className="text-[10px] text-text-faint mb-1">Or paste a URL directly</p>
+          <input
+            type="url"
+            value={form.coverImageUrl}
+            onChange={(e) => update('coverImageUrl', e.target.value)}
+            className={inputCls}
+            placeholder="https://…"
+          />
+        </div>
       </div>
     </div>
   );
@@ -581,14 +609,22 @@ function StepSeoWhitelabel({
           </div>
         </div>
         <div>
-          <Label>Logo URL</Label>
-          <input
-            type="url"
+          <ImageUpload
+            folder="hunts"
+            label="Logo"
             value={form.whitelabelLogoUrl}
-            onChange={(e) => update('whitelabelLogoUrl', e.target.value)}
-            className={inputCls}
-            placeholder="https://…"
+            onChange={(url) => update('whitelabelLogoUrl', url)}
           />
+          <div className="mt-2">
+            <p className="text-[10px] text-text-faint mb-1">Or paste a URL directly</p>
+            <input
+              type="url"
+              value={form.whitelabelLogoUrl}
+              onChange={(e) => update('whitelabelLogoUrl', e.target.value)}
+              className={inputCls}
+              placeholder="https://…"
+            />
+          </div>
         </div>
       </div>
     </div>
@@ -605,7 +641,7 @@ export default function NewHuntPage() {
   const [step, setStep] = useState(0);
 
   // Updates a single field in form state
-  function update(field: keyof FormValues, value: string) {
+  function update(field: keyof FormValues, value: string | number | null | 'CLUE_FIRST' | 'LOCATION_FIRST') {
     setForm((prev) => ({ ...prev, [field]: value }));
   }
 
@@ -613,28 +649,12 @@ export default function NewHuntPage() {
   function validateStep(stepIndex: number): string | null {
     const requiredFields = STEPS[stepIndex]!.fields as readonly (keyof FormValues)[];
     for (const key of requiredFields) {
-      if (!form[key].trim()) {
+      const val = form[key];
+      if (typeof val === 'string' && !val.trim()) {
         const label = FIELD_LABELS[key] ?? key;
         return `${label} is required`;
       }
     }
-
-    // Extra numeric validation on the map step
-    if (stepIndex === 2) {
-      if (form.centerLat.trim()) {
-        const lat = parseFloat(form.centerLat);
-        if (isNaN(lat) || lat < -90 || lat > 90) {
-          return 'Latitude must be between −90 and 90';
-        }
-      }
-      if (form.centerLng.trim()) {
-        const lng = parseFloat(form.centerLng);
-        if (isNaN(lng) || lng < -180 || lng > 180) {
-          return 'Longitude must be between −180 and 180';
-        }
-      }
-    }
-
     return null;
   }
 
@@ -659,14 +679,8 @@ export default function NewHuntPage() {
   async function handleSubmit() {
     setError(null);
 
-    const lat = parseFloat(form.centerLat);
-    const lng = parseFloat(form.centerLng);
-    if (isNaN(lat) || lat < -90 || lat > 90) {
-      setError('Latitude must be between −90 and 90');
-      return;
-    }
-    if (isNaN(lng) || lng < -180 || lng > 180) {
-      setError('Longitude must be between −180 and 180');
+    if (form.centerLat === null || form.centerLng === null) {
+      setError('Please place a pin on the map to set the starting position');
       return;
     }
 
@@ -679,9 +693,10 @@ export default function NewHuntPage() {
       theme: form.theme,
       huntType: form.huntType,
       teamMode: form.teamMode,
-      centerLat: lat,
-      centerLng: lng,
+      centerLat: form.centerLat,
+      centerLng: form.centerLng,
       zoomLevel: parseInt(form.zoomLevel, 10) || 14,
+      startMode: form.startMode,
     };
 
     if (form.slug.trim()) payload.slug = form.slug.trim();

@@ -15,12 +15,6 @@ export default function RootPage() {
           </Link>
           <div className="flex items-center gap-4">
             <Link
-              href="/about"
-              className="text-xs font-medium text-white/40 hover:text-white/70 transition-colors hidden sm:block"
-            >
-              How it Works
-            </Link>
-            <Link
               href="/player/login"
               className="text-xs font-medium text-white/80 hover:text-white border border-white/20 hover:border-white/40 px-4 py-1.5 rounded-full transition-colors"
             >
@@ -65,20 +59,9 @@ export default function RootPage() {
             >
               Browse Hunts →
             </Link>
-            <Link
-              href="/about"
-              className="border border-amber-500/30 text-amber-400 hover:border-amber-400/60 hover:text-amber-300 font-medium px-8 py-3.5 rounded-full transition-colors text-sm"
-            >
-              How it Works
-            </Link>
           </div>
         </div>
 
-        {/* Scroll hint */}
-        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-white/20">
-          <span className="text-[10px] uppercase tracking-widest">Scroll</span>
-          <div className="w-px h-8 bg-white/10 animate-pulse" />
-        </div>
       </section>
 
       {/* ── Features strip ── */}
@@ -126,12 +109,20 @@ export default function RootPage() {
             <h2 className="text-white font-bold text-2xl mb-1">Ready to hunt?</h2>
             <p className="text-white/40 text-sm">Active hunts available now in cities near you.</p>
           </div>
-          <Link
-            href="/discover"
-            className="shrink-0 bg-amber-400 hover:bg-amber-300 text-black font-semibold px-8 py-3.5 rounded-full transition-colors text-sm"
-          >
-            Browse Active Hunts →
-          </Link>
+          <div className="flex items-center gap-3 shrink-0">
+            <Link
+              href="/about"
+              className="text-sm font-semibold border border-white/20 hover:border-white/40 text-white/80 hover:text-white px-8 py-3.5 rounded-full transition-colors"
+            >
+              How it Works
+            </Link>
+            <Link
+              href="/discover"
+              className="bg-amber-400 hover:bg-amber-300 text-black font-semibold px-8 py-3.5 rounded-full transition-colors text-sm"
+            >
+              Browse Active Hunts →
+            </Link>
+          </div>
         </div>
       </section>
 
