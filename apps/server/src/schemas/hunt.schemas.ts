@@ -35,6 +35,8 @@ const huntFields = z.object({
     .optional(),
   metaTitle: z.string().max(200).trim().optional(),
   metaDescription: z.string().max(500).trim().optional(),
+  // v2 field — controls whether clue riddle or map pin is revealed first
+  startMode: z.enum(['CLUE_FIRST', 'LOCATION_FIRST']).default('LOCATION_FIRST'),
 });
 
 // Create: all hunt fields + optional slug (auto-generated from title if omitted)

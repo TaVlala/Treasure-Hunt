@@ -24,6 +24,7 @@ import type {
   HuntType,
   TeamMode,
   HuntStatus,
+  HuntStartMode,
 } from '@treasure-hunt/shared';
 
 const router = Router();
@@ -90,6 +91,7 @@ type HuntRow = {
   whitelabelColor: string | null;
   metaTitle: string | null;
   metaDescription: string | null;
+  startMode: string;
   createdAt: Date;
 };
 
@@ -124,6 +126,7 @@ function toHuntResponse(hunt: HuntRow): Hunt {
     whitelabelColor: hunt.whitelabelColor,
     metaTitle: hunt.metaTitle,
     metaDescription: hunt.metaDescription,
+    startMode: hunt.startMode.toLowerCase() as HuntStartMode,
     createdAt: hunt.createdAt.toISOString(),
   };
 }
@@ -163,6 +166,7 @@ function toCreateData(body: CreateHuntBody, slug: string, userId: string) {
     whitelabelColor: body.whitelabelColor,
     metaTitle: body.metaTitle,
     metaDescription: body.metaDescription,
+    startMode: (body.startMode ?? 'LOCATION_FIRST') as 'CLUE_FIRST' | 'LOCATION_FIRST',
     createdBy: userId,
     status: 'DRAFT' as const,
   };
@@ -212,6 +216,9 @@ function toUpdateData(body: UpdateHuntBody) {
     whitelabelColor: body.whitelabelColor,
     metaTitle: body.metaTitle,
     metaDescription: body.metaDescription,
+    startMode: body.startMode
+      ? (body.startMode as 'CLUE_FIRST' | 'LOCATION_FIRST')
+      : undefined,
   };
 }
 

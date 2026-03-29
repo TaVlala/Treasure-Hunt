@@ -23,6 +23,7 @@ import type {
   HuntType,
   TeamMode,
   HuntStatus,
+  HuntStartMode,
   PaginatedData,
   SponsorPrize,
   PrizeType,
@@ -71,6 +72,7 @@ type HuntRow = {
   whitelabelColor: string | null;
   metaTitle: string | null;
   metaDescription: string | null;
+  startMode: string;
   createdAt: Date;
 };
 
@@ -105,6 +107,7 @@ function toHuntResponse(hunt: HuntRow): Hunt {
     whitelabelColor: hunt.whitelabelColor,
     metaTitle: hunt.metaTitle,
     metaDescription: hunt.metaDescription,
+    startMode: hunt.startMode as Hunt['startMode'],
     createdAt: hunt.createdAt.toISOString(),
   };
 }
@@ -175,6 +178,9 @@ type ClueRow = {
   isBonus: boolean;
   points: number;
   unlockMessage: string | null;
+  unlockType: string;
+  locationHidden: boolean;
+  contents: Array<{ id: string; clueId: string; type: string; content: string | null; imageUrl: string | null; isHint: boolean; order: number }>;
   createdAt: Date;
 };
 
@@ -194,6 +200,17 @@ function toClueResponse(c: ClueRow): Clue {
     isBonus: c.isBonus,
     points: c.points,
     unlockMessage: c.unlockMessage,
+    unlockType: c.unlockType as Clue['unlockType'],
+    locationHidden: c.locationHidden,
+    contents: c.contents.map((item) => ({
+      id: item.id,
+      clueId: item.clueId,
+      type: item.type as 'TEXT' | 'IMAGE',
+      content: item.content,
+      imageUrl: item.imageUrl,
+      isHint: item.isHint,
+      order: item.order,
+    })),
     createdAt: c.createdAt.toISOString(),
   };
 }
@@ -302,6 +319,9 @@ router.get('/hunts/:huntId/clues/:clueId', async (req: Request, res: Response, n
         isBonus: true,
         points: true,
         unlockMessage: true,
+        unlockType: true,
+        locationHidden: true,
+        contents: { orderBy: { order: 'asc' as const } },
         createdAt: true,
         hunt: { select: { status: true } },
         sponsorClue: {
@@ -378,7 +398,7 @@ router.get('/hunts/:huntId/bundle', async (req: Request, res: Response, next: Ne
       throw new AppError('Hunt is not currently active', 404, 'NOT_FOUND');
     }
 
-    // Fetch all clues ordered by orderIndex, including sponsor join data
+    // Fetch all clues ordered by orderIndex, including sponsor join data and v2 fields
     const clueRows = await prisma.clue.findMany({
       where: { huntId },
       orderBy: { orderIndex: 'asc' },
@@ -397,6 +417,9 @@ router.get('/hunts/:huntId/bundle', async (req: Request, res: Response, next: Ne
         isBonus: true,
         points: true,
         unlockMessage: true,
+        unlockType: true,
+        locationHidden: true,
+        contents: { orderBy: { order: 'asc' as const } },
         createdAt: true,
         sponsorClue: {
           select: {

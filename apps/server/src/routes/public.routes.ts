@@ -13,6 +13,7 @@ import type {
   HuntType,
   TeamMode,
   HuntStatus,
+  HuntStartMode,
   PaginatedData,
 } from '@treasure-hunt/shared';
 
@@ -53,6 +54,7 @@ type HuntRow = {
   whitelabelColor: string | null;
   metaTitle: string | null;
   metaDescription: string | null;
+  startMode: string;
   createdAt: Date;
 };
 
@@ -87,6 +89,7 @@ function toHuntResponse(hunt: HuntRow): Hunt {
     whitelabelColor: hunt.whitelabelColor,
     metaTitle: hunt.metaTitle,
     metaDescription: hunt.metaDescription,
+    startMode: hunt.startMode as Hunt['startMode'],
     createdAt: hunt.createdAt.toISOString(),
   };
 }

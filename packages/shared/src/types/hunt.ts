@@ -1,6 +1,35 @@
 // Shared hunt and clue types used across mobile, admin, and server.
 // Keep these in sync with the Prisma schema in apps/server/prisma/schema.prisma.
 
+// v2 hunt/clue types — hunt start mode, clue unlock mechanism, and multi-content support
+export type HuntStartMode = 'CLUE_FIRST' | 'LOCATION_FIRST';
+export type UnlockType = 'GPS_PROXIMITY' | 'PASSWORD' | 'PHOTO';
+export type ContentType = 'TEXT' | 'IMAGE';
+
+// Single content block within a clue (text paragraph or image)
+export interface ClueContent {
+  id: string;
+  clueId: string;
+  type: ContentType;
+  content: string | null;
+  imageUrl: string | null;
+  isHint: boolean;
+  order: number;
+}
+
+// Accepted answer entry for PASSWORD unlock type
+export interface ClueAnswer {
+  id: string;
+  clueId: string;
+  answer: string;
+}
+
+// Result returned from the fuzzy answer check endpoint
+export interface AnswerCheckResult {
+  result: 'correct' | 'close' | 'wrong';
+  message: string;
+}
+
 export type HuntDifficulty = 'easy' | 'medium' | 'hard';
 
 export type HuntTheme =
@@ -53,6 +82,8 @@ export interface Hunt {
   whitelabelColor: string | null;
   metaTitle: string | null;
   metaDescription: string | null;
+  // v2 field — whether riddle or map pin is shown first
+  startMode: HuntStartMode;
   createdAt: string;
 }
 
@@ -77,13 +108,18 @@ export interface Clue {
   isBonus: boolean;
   points: number;
   unlockMessage: string | null;
+  // v2 fields — unlock mechanism and pin visibility control
+  unlockType: UnlockType;
+  locationHidden: boolean;
+  contents: ClueContent[];
   createdAt: string;
 }
 
-// Admin-only clue shape — includes the answer and linked sponsor
+// Admin-only clue shape — includes the answer, linked sponsor, and accepted answers list
 export interface AdminClue extends Clue {
   answer: string | null;
   sponsorId: string | null;
+  answers: ClueAnswer[];
 }
 
 // Sponsor branding data embedded in a player-facing clue response

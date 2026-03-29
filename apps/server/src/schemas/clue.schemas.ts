@@ -3,13 +3,27 @@
 
 import { z } from 'zod';
 
+// Schema for a single content item within a clue (text block or image)
+const clueContentItemSchema = z.object({
+  type: z.enum(['TEXT', 'IMAGE']),
+  content: z.string().optional(),
+  imageUrl: z.string().url().optional(),
+  isHint: z.boolean().default(false),
+  order: z.number().int().default(0),
+});
+
+// Schema for a single answer entry used by PASSWORD unlock type
+const clueAnswerItemSchema = z.object({
+  answer: z.string().min(1).max(200),
+});
+
 // Base clue fields — shared between create and update schemas
 const clueFields = z.object({
   title: z.string().min(2, 'Title must be at least 2 characters').max(200).trim(),
   description: z.string().min(5, 'Description must be at least 5 characters'),
   hintText: z.string().optional(),
   clueType: z.enum(['text_riddle', 'image', 'gps_proximity', 'qr_code', 'photo_challenge']),
-  answer: z.string().max(500).optional(), // answer to a text riddle or QR code
+  answer: z.string().max(500).optional(), // legacy single-answer field (kept for compatibility)
   imageUrl: z.string().url().max(500).optional(),
   latitude: z.number().min(-90).max(90),
   longitude: z.number().min(-180).max(180),
@@ -18,6 +32,11 @@ const clueFields = z.object({
   points: z.number().int().min(0).default(10),
   unlockMessage: z.string().optional(),
   sponsorId: z.string().uuid().nullable().optional(), // optional sponsor association
+  // v2 fields — unlock mechanism and pin visibility
+  unlockType: z.enum(['GPS_PROXIMITY', 'PASSWORD', 'PHOTO']).default('GPS_PROXIMITY'),
+  locationHidden: z.boolean().default(false),
+  contents: z.array(clueContentItemSchema).default([]),
+  answers: z.array(clueAnswerItemSchema).default([]),
 });
 
 // Create: all fields required except defaults

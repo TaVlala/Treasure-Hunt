@@ -104,6 +104,22 @@ enum FoundMethod {
   PHOTO
 }
 
+enum HuntStartMode {
+  CLUE_FIRST
+  LOCATION_FIRST
+}
+
+enum UnlockType {
+  GPS_PROXIMITY
+  PASSWORD
+  PHOTO
+}
+
+enum ContentType {
+  TEXT
+  IMAGE
+}
+
 enum RedemptionStatus {
   GENERATED
   REDEEMED
@@ -197,6 +213,9 @@ model Hunt {
   centerLng Decimal @map("center_lng") @db.Decimal(11, 8)
   zoomLevel Int     @default(14) @map("zoom_level")
 
+  // Hunt start mode — CLUE_FIRST shows riddle before pin; LOCATION_FIRST reveals pin first
+  startMode HuntStartMode @default(LOCATION_FIRST) @map("start_mode")
+
   // SEO
   metaTitle       String? @map("meta_title") @db.VarChar(200)
   metaDescription String? @map("meta_description") @db.VarChar(500)
@@ -240,14 +259,43 @@ model Clue {
   createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz()
 
+  // New v2 fields — unlock mechanism and pin visibility
+  unlockType      UnlockType @default(GPS_PROXIMITY) @map("unlock_type")
+  locationHidden  Boolean    @default(false)          @map("location_hidden")
+
   hunt            Hunt             @relation(fields: [huntId], references: [id], onDelete: Cascade)
   sponsorClue     SponsorClue?
   playerProgress  PlayerProgress[]
   analyticsEvents AnalyticsEvent[]
+  contents        ClueContent[]
+  answers         ClueAnswer[]
 
   @@unique([huntId, orderIndex])
   @@index([huntId])
   @@map("clues")
+}
+
+model ClueContent {
+  id        String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clueId    String      @map("clue_id") @db.Uuid
+  type      ContentType
+  content   String?     @db.Text
+  imageUrl  String?     @map("image_url") @db.VarChar(500)
+  isHint    Boolean     @default(false) @map("is_hint")
+  order     Int         @default(0)
+  createdAt DateTime    @default(now()) @map("created_at") @db.Timestamptz()
+  clue      Clue        @relation(fields: [clueId], references: [id], onDelete: Cascade)
+
+  @@map("clue_contents")
+}
+
+model ClueAnswer {
+  id      String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clueId  String @map("clue_id") @db.Uuid
+  answer  String @db.VarChar(200)
+  clue    Clue   @relation(fields: [clueId], references: [id], onDelete: Cascade)
+
+  @@map("clue_answers")
 }
 
 model Sponsor {

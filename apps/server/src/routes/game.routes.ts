@@ -3,9 +3,11 @@
 // Base path: /api/v1/game (registered in index.ts).
 
 import { Router, Request, Response, NextFunction } from 'express';
+import levenshtein from 'fast-levenshtein';
+import { z } from 'zod';
 import { prisma } from '../config/database';
 import { AppError } from '../middleware/errorHandler';
-import { authenticate } from '../middleware/authenticate';
+import { authenticate, requireRole } from '../middleware/authenticate';
 import { sendPushNotification } from '../services/push.service';
 import { evaluateAchievements } from '../lib/achievements';
 import { enqueueAnalytics } from '../queues/index';
@@ -29,6 +31,7 @@ import type {
   SessionStatus,
   ProgressStatus,
   FoundMethod,
+  AnswerCheckResult,
 } from '@treasure-hunt/shared';
 
 const router = Router();
@@ -101,6 +104,9 @@ type ClueRow = {
   isBonus: boolean;
   points: number;
   unlockMessage: string | null;
+  unlockType: string;
+  locationHidden: boolean;
+  contents: Array<{ id: string; clueId: string; type: string; content: string | null; imageUrl: string | null; isHint: boolean; order: number }>;
   createdAt: Date;
 };
 
@@ -120,6 +126,17 @@ function toClueResponse(c: ClueRow): Clue {
     isBonus: c.isBonus,
     points: c.points,
     unlockMessage: c.unlockMessage,
+    unlockType: c.unlockType as Clue['unlockType'],
+    locationHidden: c.locationHidden,
+    contents: c.contents.map((item) => ({
+      id: item.id,
+      clueId: item.clueId,
+      type: item.type as 'TEXT' | 'IMAGE',
+      content: item.content,
+      imageUrl: item.imageUrl,
+      isHint: item.isHint,
+      order: item.order,
+    })),
     createdAt: c.createdAt.toISOString(),
   };
 }
@@ -230,10 +247,11 @@ router.post('/sessions', async (req: Request, res: Response, next: NextFunction)
       throw new AppError('You have already joined this hunt', 409, 'ALREADY_JOINED');
     }
 
-    // Load all clues ordered so we can set first one UNLOCKED
+    // Load all clues ordered so we can set first one UNLOCKED — include contents for response
     const clues = await prisma.clue.findMany({
       where: { huntId },
       orderBy: { orderIndex: 'asc' },
+      include: { contents: { orderBy: { order: 'asc' } } },
     });
     if (clues.length === 0) {
       throw new AppError('This hunt has no clues yet', 409, 'NO_CLUES');
@@ -347,13 +365,14 @@ router.post(
       const pointsEarned = progress.clue.points;
       const dbMethod = body.method.toUpperCase() as 'GPS' | 'QR_CODE' | 'ANSWER' | 'PHOTO';
 
-      // Find the next clue in order so we can unlock it
+      // Find the next clue in order so we can unlock it — include contents for response
       const nextClueRow = await prisma.clue.findFirst({
         where: {
           huntId: session.huntId,
           orderIndex: { gt: progress.clue.orderIndex },
         },
         orderBy: { orderIndex: 'asc' },
+        include: { contents: { orderBy: { order: 'asc' } } },
       });
 
       const isLastClue = nextClueRow === null;
@@ -616,5 +635,89 @@ router.get('/hunts/:huntId/leaderboard', async (req: Request, res: Response, nex
     next(err);
   }
 });
+
+// POST /hunts/:huntId/clues/:clueId/check-answer — Levenshtein fuzzy password check.
+// Returns 'correct' (mark found), 'close' (typo hint), or 'wrong' based on edit distance.
+router.post(
+  '/hunts/:huntId/clues/:clueId/check-answer',
+  authenticate,
+  requireRole('player'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const huntId = req.params['huntId'] as string;
+      const clueId = req.params['clueId'] as string;
+      const { answer } = z.object({ answer: z.string().min(1).max(500) }).parse(req.body);
+
+      // Verify the clue belongs to this hunt and fetch its accepted answers
+      const clue = await prisma.clue.findFirst({
+        where: { id: clueId, huntId },
+        include: { answers: true },
+      });
+      if (!clue) throw new AppError('Clue not found', 404, 'NOT_FOUND');
+
+      // Compute the minimum Levenshtein distance against all accepted answers
+      const input = answer.toLowerCase().trim();
+      let minDistance = Infinity;
+      for (const a of clue.answers) {
+        const dist = levenshtein.get(input, a.answer);
+        if (dist < minDistance) minDistance = dist;
+      }
+
+      if (minDistance === 0) {
+        // Correct — find the player's active session and mark the clue found
+        const session = await prisma.gameSession.findFirst({
+          where: { huntId, playerId: req.user!.id, status: 'ACTIVE' },
+        });
+        if (!session) throw new AppError('No active session for this hunt', 400, 'NO_SESSION');
+
+        // Idempotent — skip if already found
+        const existingProgress = await prisma.playerProgress.findUnique({
+          where: { sessionId_clueId: { sessionId: session.id, clueId } },
+        });
+
+        if (existingProgress && existingProgress.status !== 'FOUND') {
+          // Mark the clue FOUND and award points atomically
+          await prisma.$transaction([
+            prisma.playerProgress.update({
+              where: { sessionId_clueId: { sessionId: session.id, clueId } },
+              data: {
+                status: 'FOUND',
+                foundAt: new Date(),
+                method: 'ANSWER' as const,
+                pointsEarned: clue.points,
+              },
+            }),
+            prisma.gameSession.update({
+              where: { id: session.id },
+              data: { score: { increment: clue.points }, cluesFound: { increment: 1 } },
+            }),
+          ]);
+        }
+
+        const result: ApiSuccess<AnswerCheckResult> = {
+          success: true,
+          data: { result: 'correct', message: 'Correct! Moving to the next stop.' },
+        };
+        res.json(result);
+      } else if (minDistance <= 2) {
+        // Close — likely a typo
+        const result: ApiSuccess<AnswerCheckResult> = {
+          success: true,
+          data: { result: 'close', message: "Almost! You might have a typo — try again." },
+        };
+        res.json(result);
+      } else {
+        // Wrong — too far off
+        const result: ApiSuccess<AnswerCheckResult> = {
+          success: true,
+          data: { result: 'wrong', message: "Incorrect answer, keep looking." },
+        };
+        res.json(result);
+      }
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 export default router;

@@ -29,6 +29,24 @@ router.use(authenticate, requireRole('admin'));
 // Structural type matching Prisma Clue rows — avoids importing Prisma.Decimal directly
 type PrismaDecimal = { toNumber(): number };
 
+// ClueContent item shape returned from Prisma includes
+type ContentItem = {
+  id: string;
+  clueId: string;
+  type: string;
+  content: string | null;
+  imageUrl: string | null;
+  isHint: boolean;
+  order: number;
+};
+
+// ClueAnswer item shape returned from Prisma includes
+type AnswerItem = {
+  id: string;
+  clueId: string;
+  answer: string;
+};
+
 // sponsorId lives in the SponsorClue join table, not as a direct column on Clue.
 // Queries that call toClueResponse must include: { sponsorClue: { select: { sponsorId: true } } }
 type ClueRow = {
@@ -47,9 +65,20 @@ type ClueRow = {
   isBonus: boolean;
   points: number;
   unlockMessage: string | null;
+  unlockType: string;
+  locationHidden: boolean;
   sponsorClue: { sponsorId: string } | null;
+  contents: ContentItem[];
+  answers: AnswerItem[];
   createdAt: Date;
 };
+
+// Standard include clause — fetches sponsor, contents (sorted), and answers on every clue query
+const CLUE_INCLUDE = {
+  sponsorClue: { select: { sponsorId: true } },
+  contents: { orderBy: { order: 'asc' as const } },
+  answers: true,
+} as const;
 
 // Converts a Prisma clue row to the shared AdminClue API response shape
 function toClueResponse(clue: ClueRow): AdminClue {
@@ -69,7 +98,23 @@ function toClueResponse(clue: ClueRow): AdminClue {
     isBonus: clue.isBonus,
     points: clue.points,
     unlockMessage: clue.unlockMessage,
+    unlockType: clue.unlockType as AdminClue['unlockType'],
+    locationHidden: clue.locationHidden,
     sponsorId: clue.sponsorClue?.sponsorId ?? null,
+    contents: clue.contents.map((c) => ({
+      id: c.id,
+      clueId: c.clueId,
+      type: c.type as 'TEXT' | 'IMAGE',
+      content: c.content,
+      imageUrl: c.imageUrl,
+      isHint: c.isHint,
+      order: c.order,
+    })),
+    answers: clue.answers.map((a) => ({
+      id: a.id,
+      clueId: a.clueId,
+      answer: a.answer,
+    })),
     createdAt: clue.createdAt.toISOString(),
   };
 }
@@ -119,6 +164,8 @@ function toCreateData(body: CreateClueBody, huntId: string, orderIndex: number) 
     isBonus: body.isBonus,
     points: body.points,
     unlockMessage: body.unlockMessage,
+    unlockType: (body.unlockType ?? 'GPS_PROXIMITY') as 'GPS_PROXIMITY' | 'PASSWORD' | 'PHOTO',
+    locationHidden: body.locationHidden ?? false,
   };
 }
 
@@ -145,6 +192,8 @@ function toUpdateData(body: UpdateClueBody) {
     isBonus: body.isBonus,
     points: body.points,
     unlockMessage: body.unlockMessage,
+    unlockType: body.unlockType as 'GPS_PROXIMITY' | 'PASSWORD' | 'PHOTO' | undefined,
+    locationHidden: body.locationHidden,
   };
 }
 
@@ -152,7 +201,7 @@ function toUpdateData(body: UpdateClueBody) {
 // Routes
 // ---------------------------------------------------------------------------
 
-// POST / — Create a clue (auto-assigns the next orderIndex for this hunt)
+// POST / — Create a clue with optional multi-content and answer records (transactional)
 router.post('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const huntId = req.params['huntId'] as string;
@@ -168,10 +217,44 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
     });
     const orderIndex = (last?.orderIndex ?? -1) + 1;
 
-    const clue = await prisma.clue.create({
-      data: toCreateData(body, huntId, orderIndex),
-      include: { sponsorClue: { select: { sponsorId: true } } },
+    // Create clue + contents + answers atomically
+    const clue = await prisma.$transaction(async (tx) => {
+      const c = await tx.clue.create({
+        data: toCreateData(body, huntId, orderIndex),
+      });
+
+      // Create content items if provided
+      if (body.contents && body.contents.length > 0) {
+        await tx.clueContent.createMany({
+          data: body.contents.map((item, i) => ({
+            clueId: c.id,
+            type: item.type as 'TEXT' | 'IMAGE',
+            content: item.content ?? null,
+            imageUrl: item.imageUrl ?? null,
+            isHint: item.isHint ?? false,
+            order: item.order ?? i,
+          })),
+        });
+      }
+
+      // Create answer entries if provided (lowercased + trimmed for Levenshtein matching)
+      if (body.answers && body.answers.length > 0) {
+        await tx.clueAnswer.createMany({
+          data: body.answers.map((a) => ({
+            clueId: c.id,
+            answer: a.answer.toLowerCase().trim(),
+          })),
+        });
+      }
+
+      // Return full clue with relations for the response
+      return tx.clue.findUnique({
+        where: { id: c.id },
+        include: CLUE_INCLUDE,
+      });
     });
+
+    if (!clue) throw new AppError('Failed to create clue', 500, 'SERVER_ERROR');
 
     // Set the PostGIS geography column — used by GPS proximity checks
     await setClueLocation(clue.id, body.latitude, body.longitude);
@@ -190,8 +273,8 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
       message: 'Clue created',
       data: toClueResponse({
         ...clue,
-        sponsorClue: body.sponsorId ? { sponsorId: body.sponsorId } : null,
-      }),
+        sponsorClue: body.sponsorId ? { sponsorId: body.sponsorId } : (clue.sponsorClue ?? null),
+      } as ClueRow),
     };
     res.status(201).json(response);
   } catch (err) {
@@ -199,7 +282,7 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
   }
 });
 
-// GET / — List all clues for a hunt, ordered by orderIndex
+// GET / — List all clues for a hunt, ordered by orderIndex, with contents and answers
 router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const huntId = req.params['huntId'] as string;
@@ -209,12 +292,12 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     const clues = await prisma.clue.findMany({
       where: { huntId },
       orderBy: { orderIndex: 'asc' },
-      include: { sponsorClue: { select: { sponsorId: true } } },
+      include: CLUE_INCLUDE,
     });
 
     const response: ApiSuccess<AdminClue[]> = {
       success: true,
-      data: clues.map(toClueResponse),
+      data: clues.map((c) => toClueResponse(c as unknown as ClueRow)),
     };
     res.status(200).json(response);
   } catch (err) {
@@ -257,12 +340,12 @@ router.put('/reorder', async (req: Request, res: Response, next: NextFunction) =
     const clues = await prisma.clue.findMany({
       where: { huntId },
       orderBy: { orderIndex: 'asc' },
-      include: { sponsorClue: { select: { sponsorId: true } } },
+      include: CLUE_INCLUDE,
     });
 
     const response: ApiSuccess<AdminClue[]> = {
       success: true,
-      data: clues.map(toClueResponse),
+      data: clues.map((c) => toClueResponse(c as unknown as ClueRow)),
     };
     res.status(200).json(response);
   } catch (err) {
@@ -270,7 +353,7 @@ router.put('/reorder', async (req: Request, res: Response, next: NextFunction) =
   }
 });
 
-// PATCH /:clueId — Partial update — only provided fields are changed
+// PATCH /:clueId — Partial update — replaces contents and answers, updates clue fields
 router.patch('/:clueId', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const huntId = req.params['huntId'] as string;
@@ -283,11 +366,52 @@ router.patch('/:clueId', async (req: Request, res: Response, next: NextFunction)
       throw new AppError('Clue not found', 404, 'NOT_FOUND');
     }
 
-    const clue = await prisma.clue.update({
-      where: { id: clueId },
-      data: toUpdateData(body),
-      include: { sponsorClue: { select: { sponsorId: true } } },
+    // Delete-recreate contents and answers, then update clue fields atomically
+    const clue = await prisma.$transaction(async (tx) => {
+      // Always wipe and recreate contents if the field was provided
+      if (body.contents !== undefined) {
+        await tx.clueContent.deleteMany({ where: { clueId } });
+        if (body.contents.length > 0) {
+          await tx.clueContent.createMany({
+            data: body.contents.map((item, i) => ({
+              clueId,
+              type: item.type as 'TEXT' | 'IMAGE',
+              content: item.content ?? null,
+              imageUrl: item.imageUrl ?? null,
+              isHint: item.isHint ?? false,
+              order: item.order ?? i,
+            })),
+          });
+        }
+      }
+
+      // Always wipe and recreate answers if the field was provided
+      if (body.answers !== undefined) {
+        await tx.clueAnswer.deleteMany({ where: { clueId } });
+        if (body.answers.length > 0) {
+          await tx.clueAnswer.createMany({
+            data: body.answers.map((a) => ({
+              clueId,
+              answer: a.answer.toLowerCase().trim(),
+            })),
+          });
+        }
+      }
+
+      // Update the clue row itself
+      await tx.clue.update({
+        where: { id: clueId },
+        data: toUpdateData(body),
+      });
+
+      // Return the refreshed full clue
+      return tx.clue.findUnique({
+        where: { id: clueId },
+        include: CLUE_INCLUDE,
+      });
     });
+
+    if (!clue) throw new AppError('Clue not found after update', 500, 'SERVER_ERROR');
 
     // Update the PostGIS column if coordinates changed
     const lat = body.latitude ?? existing.latitude.toNumber();
@@ -309,17 +433,17 @@ router.patch('/:clueId', async (req: Request, res: Response, next: NextFunction)
       });
     }
 
-    // Re-read sponsorClue after potential update so the response is accurate
+    // Determine sponsorClue for the response after potential update
     const sponsorClueAfter =
       body.sponsorId === null
         ? null
         : body.sponsorId
           ? { sponsorId: body.sponsorId }
-          : clue.sponsorClue;
+          : (clue.sponsorClue ?? null);
 
     const response: ApiSuccess<AdminClue> = {
       success: true,
-      data: toClueResponse({ ...clue, sponsorClue: sponsorClueAfter }),
+      data: toClueResponse({ ...clue, sponsorClue: sponsorClueAfter } as unknown as ClueRow),
     };
     res.status(200).json(response);
   } catch (err) {
