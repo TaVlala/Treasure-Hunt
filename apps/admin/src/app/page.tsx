@@ -74,7 +74,7 @@ export default async function RootPage() {
       </nav>
 
       {/* Hero */}
-      <section className="relative flex min-h-[calc(100vh-3.5rem)] flex-col items-center justify-start px-6 pb-24 pt-28 text-center">
+      <section className="relative flex min-h-[calc(100vh-3.5rem)] flex-col items-center justify-start overflow-hidden px-6 pb-12 pt-16 text-center md:pt-20">
         <div
           className="pointer-events-none absolute inset-0"
           style={{
@@ -83,22 +83,22 @@ export default async function RootPage() {
           }}
         />
 
-        <div className="relative z-10 max-w-3xl">
-          <p className="mb-6 text-xs font-medium uppercase tracking-widest text-amber-400/70">
+        <div className="relative z-10 flex w-full max-w-5xl flex-col items-center">
+          <p className="mb-4 text-[11px] font-medium uppercase tracking-[0.28em] text-amber-400/70">
             Location-Based Scavenger Hunts
           </p>
-          <h1 className="mb-6 text-4xl font-bold leading-tight tracking-tight text-white sm:text-5xl md:text-6xl">
+          <h1 className="mb-4 text-4xl font-bold leading-[0.95] tracking-tight text-white sm:text-5xl md:text-[5rem]">
             Explore the City
             <br />
             Find Clues
             <br />
             <span className="text-amber-400">Win Prizes</span>
           </h1>
-          <p className="mx-auto mb-10 max-w-md text-lg leading-relaxed text-white/50">
+          <p className="mx-auto mb-6 max-w-2xl text-base leading-relaxed text-white/50 sm:text-lg">
             Location-based scavenger hunts that turn tourists into locals - and locals into explorers.
           </p>
           {featuredHunts.length > 0 && (
-            <div className="mb-10 grid w-full max-w-5xl grid-cols-1 gap-3 text-left sm:grid-cols-2 xl:grid-cols-3">
+            <div className="mb-6 grid w-full max-w-4xl grid-cols-1 gap-3 text-left md:grid-cols-3">
               {featuredHunts.map((hunt) => (
                 <Link
                   key={hunt.id}
@@ -151,7 +151,7 @@ export default async function RootPage() {
               Browse All Hunts →
             </Link>
           </div>
-          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+          <div className="mt-5 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link
               href={APP_STORE_URL}
               target="_blank"
