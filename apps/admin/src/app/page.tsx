@@ -72,7 +72,7 @@ export default function RootPage() {
               Browse Hunts →
             </Link>
           </div>
-          <div className="mt-4 flex flex-col items-center justify-center gap-3 sm:flex-row">
+          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link
               href={APP_STORE_URL}
               target="_blank"
