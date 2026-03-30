@@ -655,6 +655,11 @@ export default function NewHuntPage() {
         return `${label} is required`;
       }
     }
+    // Step 0 extra checks
+    if (stepIndex === 0) {
+      if (form.description.trim().length < 10) return 'Description must be at least 10 characters';
+      if (form.title.trim().length < 3) return 'Title must be at least 3 characters';
+    }
     return null;
   }
 

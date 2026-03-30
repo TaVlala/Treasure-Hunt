@@ -72,11 +72,17 @@ export async function clientFetch<T>(path: string, init: RequestInit = {}): Prom
     res = await makeRequest(newToken);
   }
 
-  const json = (await res.json()) as { success: boolean; data: T; error?: string };
+  const json = (await res.json()) as { success: boolean; data: T; error?: string; details?: Record<string, string[]> };
   if (!res.ok || !json.success) {
-    throw new Error(
-      (json as unknown as { error?: string }).error ?? `Request failed (${res.status})`,
-    );
+    let msg = json.error ?? `Request failed (${res.status})`;
+    // Append field-level validation details so the user knows exactly what's wrong
+    if (json.details && Object.keys(json.details).length > 0) {
+      const fieldErrors = Object.entries(json.details)
+        .map(([field, msgs]) => `${field}: ${msgs.join(', ')}`)
+        .join(' · ');
+      msg = `${msg} — ${fieldErrors}`;
+    }
+    throw new Error(msg);
   }
   return json.data;
 }
