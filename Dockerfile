@@ -20,5 +20,5 @@ COPY apps/server ./apps/server
 RUN npx prisma generate --schema=apps/server/prisma/schema.prisma
 RUN npm run build --workspace=apps/server
 
-# Start — run migration then boot server
-CMD ["sh", "-c", "npx prisma migrate deploy --schema=apps/server/prisma/schema.prisma && node apps/server/dist/apps/server/src/index.js"]
+# Start — baseline existing migration (already in DB via db push), deploy new ones, boot
+CMD ["sh", "-c", "npx prisma migrate resolve --applied 20260311000000_add_push_token --schema=apps/server/prisma/schema.prisma 2>&1 || true && npx prisma migrate deploy --schema=apps/server/prisma/schema.prisma && node apps/server/dist/apps/server/src/index.js"]
