@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { clientFetch } from '@/lib/api';
+import ImageUpload from '@/components/ui/ImageUpload';
 import type { SponsorDetail } from '@treasure-hunt/shared';
 
 interface Props {
@@ -411,13 +412,21 @@ export function EditSponsorForm({ sponsor }: Props) {
         onToggle={() => setShowBranding(!showBranding)}
       >
         <div>
-          <Label>Logo URL</Label>
-          <input
-            type="url"
+          <Label>Logo</Label>
+          <ImageUpload
+            folder="sponsors"
             value={form.logoUrl}
-            onChange={(e) => update('logoUrl', e.target.value)}
-            className={inputCls}
+            onChange={(url) => update('logoUrl', url)}
           />
+          <div className="mt-2">
+            <input
+              type="url"
+              value={form.logoUrl}
+              onChange={(e) => update('logoUrl', e.target.value)}
+              className={inputCls}
+              placeholder="Or paste a URL directly"
+            />
+          </div>
         </div>
         <div>
           <Label>Internal Notes</Label>

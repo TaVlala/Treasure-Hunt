@@ -6,6 +6,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { clientFetch } from '@/lib/api';
+import ImageUpload from '@/components/ui/ImageUpload';
 
 interface Props {
   huntId: string;
@@ -123,14 +124,22 @@ export function WhitelabelForm({ huntId, initialName, initialLogoUrl, initialCol
 
         {/* Logo URL + preview */}
         <div>
-          <Label>Logo URL</Label>
-          <input
-            type="url"
+          <Label>Logo</Label>
+          <ImageUpload
+            folder="hunts"
             value={logoUrl}
-            onChange={(e) => { setLogoUrl(e.target.value); setSuccess(false); }}
-            className={inputCls}
-            placeholder="https://example.com/logo.png"
+            onChange={(url) => { setLogoUrl(url); setSuccess(false); }}
           />
+          <div className="mt-2">
+            <p className="text-[10px] text-text-faint mb-1">Or paste a URL directly</p>
+            <input
+              type="url"
+              value={logoUrl}
+              onChange={(e) => { setLogoUrl(e.target.value); setSuccess(false); }}
+              className={inputCls}
+              placeholder="https://example.com/logo.png"
+            />
+          </div>
           <p className="mt-1.5 text-xs text-text-faint">
             Direct URL to the brand logo (PNG or SVG recommended). Displayed in the player app header.
           </p>

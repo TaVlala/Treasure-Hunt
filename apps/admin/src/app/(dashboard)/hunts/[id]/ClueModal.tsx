@@ -1,65 +1,51 @@
-// Clue create / edit / delete modal.
-// In create mode (clue=null) it POSTs a new clue; in edit mode it PATCHes.
-// Lat/lng are pre-filled from the map click but remain editable.
-// Fetches active sponsors on mount to populate the sponsor selector.
+// Clue (Stop) create / edit / delete modal.
+// Supports multi-content clues, unlock types (GPS / Password / Photo), and hidden location pins.
 
 'use client';
 
 import { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import { clientFetch } from '@/lib/api';
+import ImageUpload from '@/components/ui/ImageUpload';
 import type { AdminClue, PaginatedData, SponsorDetail } from '@treasure-hunt/shared';
 
-// Minimal sponsor shape needed for the dropdown
+// MapPinPicker requires browser — dynamic import to avoid SSR
+const MapPinPicker = dynamic(() => import('@/components/MapPinPicker'), { ssr: false });
+
 interface SponsorOption {
   id: string;
   businessName: string;
 }
 
+interface ContentItem {
+  id?: string;
+  type: 'TEXT' | 'IMAGE';
+  content: string;
+  imageUrl: string;
+  isHint: boolean;
+  order: number;
+}
+
+interface AnswerItem {
+  id?: string;
+  answer: string;
+}
+
 interface Props {
   huntId: string;
-  /** null = create mode; AdminClue = edit mode */
   clue: AdminClue | null;
-  /** Pre-filled coordinates from the map click */
   lat: number;
   lng: number;
+  clueOrder?: number; // position in hunt (1-based) — determines if locationHidden toggle is shown
   onClose: () => void;
   onSaved: (clue: AdminClue) => void;
   onDeleted: (clueId: string) => void;
-}
-
-// Clue types with human-readable labels
-const CLUE_TYPES = [
-  { value: 'text_riddle', label: 'Text Riddle' },
-  { value: 'image', label: 'Image' },
-  { value: 'gps_proximity', label: 'GPS Proximity' },
-  { value: 'qr_code', label: 'QR Code' },
-  { value: 'photo_challenge', label: 'Photo Challenge' },
-] as const;
-
-interface FormValues {
-  title: string;
-  clueType: string;
-  description: string;
-  answer: string;
-  hintText: string;
-  lat: string;
-  lng: string;
-  proximityRadiusMeters: string;
-  points: string;
-  isBonus: boolean;
-  imageUrl: string;
-  unlockMessage: string;
-  sponsorId: string; // empty string = no sponsor
 }
 
 const inputCls =
   'w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-white ' +
   'placeholder:text-text-faint focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent ' +
   'transition-colors';
-
-const selectCls =
-  'w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-white ' +
-  'focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors cursor-pointer';
 
 function Label({ children, required }: { children: React.ReactNode; required?: boolean }) {
   return (
@@ -70,96 +56,131 @@ function Label({ children, required }: { children: React.ReactNode; required?: b
   );
 }
 
-export function ClueModal({ huntId, clue, lat, lng, onClose, onSaved, onDeleted }: Props) {
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return <p className="text-sm font-semibold text-white mb-3">{children}</p>;
+}
+
+export function ClueModal({ huntId, clue, lat, lng, clueOrder = 1, onClose, onSaved, onDeleted }: Props) {
   const isEdit = clue !== null;
 
-  // Initialise form from existing clue or from map-click coordinates
-  const [form, setForm] = useState<FormValues>({
-    title: clue?.title ?? '',
-    clueType: clue?.clueType ?? 'text_riddle',
-    description: clue?.description ?? '',
-    answer: clue?.answer ?? '',
-    hintText: clue?.hintText ?? '',
-    lat: String(clue?.latitude ?? lat),
-    lng: String(clue?.longitude ?? lng),
-    proximityRadiusMeters: String(clue?.proximityRadiusMeters ?? 50),
-    points: String(clue?.points ?? 10),
-    isBonus: clue?.isBonus ?? false,
-    imageUrl: clue?.imageUrl ?? '',
-    unlockMessage: clue?.unlockMessage ?? '',
-    sponsorId: clue?.sponsorId ?? '',
-  });
+  // --- Location state ---
+  const [pinLat, setPinLat] = useState<number | null>(clue?.latitude ?? lat);
+  const [pinLng, setPinLng] = useState<number | null>(clue?.longitude ?? lng);
+  const [radius, setRadius] = useState(String(clue?.proximityRadiusMeters ?? 50));
+  const [locationHidden, setLocationHidden] = useState(
+    (clue as AdminClue & { locationHidden?: boolean })?.locationHidden ?? false,
+  );
+
+  // --- Content state ---
+  const existingContents = (clue as AdminClue & { contents?: ContentItem[] })?.contents;
+  const [contents, setContents] = useState<ContentItem[]>(
+    existingContents?.length
+      ? existingContents.map((c) => ({ ...c, content: c.content ?? '', imageUrl: c.imageUrl ?? '' }))
+      : [{ type: 'TEXT', content: '', imageUrl: '', isHint: false, order: 0 }],
+  );
+
+  // --- Unlock state ---
+  type UnlockType = 'GPS_PROXIMITY' | 'PASSWORD' | 'PHOTO';
+  const existingUnlock = (clue as AdminClue & { unlockType?: UnlockType })?.unlockType;
+  const [unlockType, setUnlockType] = useState<UnlockType>(existingUnlock ?? 'GPS_PROXIMITY');
+  const existingAnswers = (clue as AdminClue & { answers?: AnswerItem[] })?.answers;
+  const [answers, setAnswers] = useState<AnswerItem[]>(existingAnswers ?? []);
+
+  // --- Other fields ---
+  const [title, setTitle] = useState(clue?.title ?? '');
+  const [points, setPoints] = useState(String(clue?.points ?? 10));
+  const [isBonus, setIsBonus] = useState(clue?.isBonus ?? false);
+  const [unlockMessage, setUnlockMessage] = useState(clue?.unlockMessage ?? '');
+  const [sponsorId, setSponsorId] = useState(clue?.sponsorId ?? '');
+  const [sponsors, setSponsors] = useState<SponsorOption[]>([]);
+
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Sponsor list for the dropdown — fetched once when the modal opens
-  const [sponsors, setSponsors] = useState<SponsorOption[]>([]);
-
-  // Fetch active sponsors on mount (fire-and-forget — failure just leaves dropdown empty)
+  // Fetch active sponsors for dropdown
   useEffect(() => {
-    void clientFetch<PaginatedData<SponsorDetail>>(
-      '/api/v1/admin/sponsors?status=active&pageSize=100',
-    )
-      .then((data) =>
-        setSponsors(data.items.map((s) => ({ id: s.id, businessName: s.businessName }))),
-      )
-      .catch(() => {
-        // Silently ignore — sponsor selector is optional
-      });
+    void clientFetch<PaginatedData<SponsorDetail>>('/api/v1/admin/sponsors?status=active&pageSize=100')
+      .then((data) => setSponsors(data.items.map((s) => ({ id: s.id, businessName: s.businessName }))))
+      .catch(() => {});
   }, []);
 
-  // Sync lat/lng if parent updates the coordinates (e.g. map re-click while modal is open)
+  // Sync pin if parent updates coordinates (map re-click while modal open)
   useEffect(() => {
-    if (!isEdit) {
-      setForm((prev) => ({ ...prev, lat: String(lat), lng: String(lng) }));
-    }
+    if (!isEdit) { setPinLat(lat); setPinLng(lng); }
   }, [lat, lng, isEdit]);
 
-  function update(field: keyof FormValues, value: string | boolean) {
-    setForm((prev) => ({ ...prev, [field]: value }));
-  }
+  // --- Content helpers ---
+  const updateContent = (i: number, field: keyof ContentItem, value: unknown) =>
+    setContents((prev) => prev.map((c, idx) => idx === i ? { ...c, [field]: value } : c));
+  const removeContent = (i: number) =>
+    setContents((prev) => prev.filter((_, idx) => idx !== i));
+  const addClue = () =>
+    setContents((prev) => [...prev, { type: 'TEXT', content: '', imageUrl: '', isHint: false, order: prev.length }]);
+  const addHint = () =>
+    setContents((prev) => [...prev, { type: 'TEXT', content: '', imageUrl: '', isHint: true, order: prev.length }]);
+  const moveContent = (i: number, dir: -1 | 1) => {
+    const next = i + dir;
+    if (next < 0 || next >= contents.length) return;
+    setContents((prev) => {
+      const arr = [...prev];
+      [arr[i], arr[next]] = [arr[next]!, arr[i]!];
+      return arr.map((c, idx) => ({ ...c, order: idx }));
+    });
+  };
 
-  // Shows answer field for riddles and QR codes; image field for image types
-  const showAnswer = form.clueType === 'text_riddle' || form.clueType === 'qr_code';
-  const showImage = form.clueType === 'image' || form.clueType === 'photo_challenge';
-  const showRadius = form.clueType === 'gps_proximity';
+  // --- Answer helpers ---
+  const updateAnswer = (i: number, val: string) =>
+    setAnswers((prev) => prev.map((a, idx) => idx === i ? { ...a, answer: val } : a));
+  const removeAnswer = (i: number) =>
+    setAnswers((prev) => prev.filter((_, idx) => idx !== i));
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
 
-    if (!form.title.trim()) { setError('Title is required'); return; }
-    if (!form.description.trim()) { setError('Description is required'); return; }
-
-    const latNum = parseFloat(form.lat);
-    const lngNum = parseFloat(form.lng);
-    if (isNaN(latNum) || isNaN(lngNum)) { setError('Valid coordinates are required'); return; }
+    if (!title.trim()) { setError('Title is required'); return; }
+    if (pinLat === null || pinLng === null) { setError('Please click the map to set a location'); return; }
+    if (unlockType === 'PASSWORD' && answers.length === 0) {
+      setError('Add at least one accepted answer for password unlock'); return;
+    }
 
     const payload: Record<string, unknown> = {
-      title: form.title.trim(),
-      clueType: form.clueType,
-      description: form.description.trim(),
-      latitude: latNum,
-      longitude: lngNum,
-      points: parseInt(form.points, 10) || 10,
-      isBonus: form.isBonus,
-      proximityRadiusMeters: parseInt(form.proximityRadiusMeters, 10) || 50,
+      title: title.trim(),
+      latitude: pinLat,
+      longitude: pinLng,
+      proximityRadiusMeters: parseInt(radius, 10) || 50,
+      points: parseInt(points, 10) || 10,
+      isBonus,
+      unlockType,
+      locationHidden,
+      contents: contents.map((c, i) => ({
+        ...(c.id ? { id: c.id } : {}),
+        type: c.type,
+        content: c.content.trim() || null,
+        imageUrl: c.imageUrl.trim() || null,
+        isHint: c.isHint,
+        order: i,
+      })),
+      answers: unlockType === 'PASSWORD'
+        ? answers.filter((a) => a.answer.trim()).map((a) => ({ ...(a.id ? { id: a.id } : {}), answer: a.answer.trim() }))
+        : [],
+      sponsorId: sponsorId || null,
     };
 
-    if (form.answer.trim()) payload.answer = form.answer.trim();
-    if (form.hintText.trim()) payload.hintText = form.hintText.trim();
-    if (form.imageUrl.trim()) payload.imageUrl = form.imageUrl.trim();
-    if (form.unlockMessage.trim()) payload.unlockMessage = form.unlockMessage.trim();
-    // null unlinks the sponsor; a UUID links it
-    payload.sponsorId = form.sponsorId || null;
+    if (unlockMessage.trim()) payload.unlockMessage = unlockMessage.trim();
+
+    // Keep legacy fields populated for backwards compat
+    const firstText = contents.find((c) => c.type === 'TEXT' && !c.isHint);
+    const firstImage = contents.find((c) => c.type === 'IMAGE' && !c.isHint);
+    if (firstText) payload.description = firstText.content;
+    if (firstImage) payload.imageUrl = firstImage.imageUrl;
 
     try {
       setLoading(true);
       const url = isEdit
         ? `/api/v1/admin/hunts/${huntId}/clues/${clue.id}`
         : `/api/v1/admin/hunts/${huntId}/clues`;
-
       const saved = await clientFetch<AdminClue>(url, {
         method: isEdit ? 'PATCH' : 'POST',
         body: JSON.stringify(payload),
@@ -174,12 +195,9 @@ export function ClueModal({ huntId, clue, lat, lng, onClose, onSaved, onDeleted 
 
   async function handleDelete() {
     if (!isEdit) return;
-    setError(null);
     try {
       setDeleting(true);
-      await clientFetch(`/api/v1/admin/hunts/${huntId}/clues/${clue.id}`, {
-        method: 'DELETE',
-      });
+      await clientFetch(`/api/v1/admin/hunts/${huntId}/clues/${clue.id}`, { method: 'DELETE' });
       onDeleted(clue.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete clue');
@@ -189,258 +207,205 @@ export function ClueModal({ huntId, clue, lat, lng, onClose, onSaved, onDeleted 
   }
 
   return (
-    /* Overlay */
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-
-      {/* Modal panel */}
       <div
         className="relative bg-sidebar border border-border rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border sticky top-0 bg-sidebar z-10">
-          <h2 className="text-base font-semibold text-white">
-            {isEdit ? 'Edit Clue' : 'Add Clue'}
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-text-muted hover:text-white transition-colors p-1"
-          >
+          <h2 className="text-base font-semibold text-white">{isEdit ? 'Edit Stop' : 'Add Stop'}</h2>
+          <button onClick={onClose} className="text-text-muted hover:text-white transition-colors p-1">
             <svg width="16" height="16" fill="none" viewBox="0 0 16 16">
               <path d="M3 3l10 10M13 3L3 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
             </svg>
           </button>
         </div>
 
-        {/* Form body */}
-        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
-
-          {/* Error */}
+        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-6">
           {error && (
             <div className="px-3 py-2.5 bg-red-500/10 border border-red-500/30 rounded-lg text-sm text-red-400">
               {error}
             </div>
           )}
 
-          {/* Title + Type row */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2 sm:col-span-1">
-              <Label required>Title</Label>
-              <input
-                type="text"
-                value={form.title}
-                onChange={(e) => update('title', e.target.value)}
-                className={inputCls}
-                placeholder="e.g. The Old Bridge"
-                maxLength={200}
-              />
+          {/* Title */}
+          <div>
+            <Label required>Stop Title</Label>
+            <input type="text" value={title} onChange={(e) => setTitle(e.target.value)}
+              className={inputCls} placeholder="e.g. The Old Bridge" maxLength={200} />
+          </div>
+
+          {/* Section 1 — Location */}
+          <div className="space-y-3">
+            <SectionTitle>Location</SectionTitle>
+            <MapPinPicker
+              lat={pinLat}
+              lng={pinLng}
+              onChange={(lat, lng) => { setPinLat(lat); setPinLng(lng); }}
+              height={240}
+            />
+            <div className="w-40">
+              <Label>Arrival Radius (m)</Label>
+              <input type="number" min="5" max="5000" value={radius}
+                onChange={(e) => setRadius(e.target.value)} className={inputCls} placeholder="50" />
             </div>
-            <div className="col-span-2 sm:col-span-1">
-              <Label required>Clue Type</Label>
-              <select
-                value={form.clueType}
-                onChange={(e) => update('clueType', e.target.value)}
-                className={selectCls}
-              >
-                {CLUE_TYPES.map(({ value, label }) => (
-                  <option key={value} value={value} className="bg-surface">
-                    {label}
-                  </option>
+            {clueOrder > 1 && (
+              <label className="flex items-center gap-3 cursor-pointer select-none">
+                <input type="checkbox" checked={locationHidden}
+                  onChange={(e) => setLocationHidden(e.target.checked)}
+                  className="w-4 h-4 rounded accent-amber-400" />
+                <span className="text-sm text-text-muted">Hide pin until previous stop is completed</span>
+              </label>
+            )}
+          </div>
+
+          {/* Section 2 — Clues & Hints */}
+          <div className="space-y-3">
+            <SectionTitle>Clues & Hints</SectionTitle>
+            {contents.map((item, i) => (
+              <div key={i} className="bg-surface-2 border border-border rounded-lg p-3 space-y-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Type toggle */}
+                  {(['TEXT', 'IMAGE'] as const).map((t) => (
+                    <button key={t} type="button" onClick={() => updateContent(i, 'type', t)}
+                      className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                        item.type === t ? 'bg-accent text-black' : 'bg-surface text-text-muted hover:text-white'
+                      }`}
+                    >{t}</button>
+                  ))}
+                  {/* Hint toggle */}
+                  <button type="button" onClick={() => updateContent(i, 'isHint', !item.isHint)}
+                    className={`ml-auto px-3 py-1 rounded text-xs font-medium transition-colors ${
+                      item.isHint
+                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                        : 'bg-surface text-text-muted hover:text-white'
+                    }`}
+                  >{item.isHint ? 'Hidden Hint' : 'Shown Upfront'}</button>
+                  {/* Reorder */}
+                  <button type="button" onClick={() => moveContent(i, -1)} disabled={i === 0}
+                    className="text-text-faint hover:text-white disabled:opacity-30 px-1 text-xs">↑</button>
+                  <button type="button" onClick={() => moveContent(i, 1)} disabled={i === contents.length - 1}
+                    className="text-text-faint hover:text-white disabled:opacity-30 px-1 text-xs">↓</button>
+                  {/* Delete */}
+                  {contents.length > 1 && (
+                    <button type="button" onClick={() => removeContent(i)}
+                      className="text-red-400 hover:text-red-300 px-1 text-xs">✕</button>
+                  )}
+                </div>
+                {item.type === 'TEXT' ? (
+                  <textarea value={item.content} onChange={(e) => updateContent(i, 'content', e.target.value)}
+                    placeholder={item.isHint ? 'Enter hint text…' : 'Enter clue text or riddle…'}
+                    rows={3}
+                    className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-white placeholder:text-text-faint focus:outline-none focus:border-accent resize-none" />
+                ) : (
+                  <ImageUpload folder="clues" value={item.imageUrl}
+                    onChange={(url) => updateContent(i, 'imageUrl', url)} />
+                )}
+              </div>
+            ))}
+            <div className="flex gap-2">
+              <button type="button" onClick={addClue}
+                className="flex-1 py-2 border border-dashed border-border rounded-lg text-xs text-text-muted hover:border-accent hover:text-accent transition-colors">
+                + Add Clue
+              </button>
+              <button type="button" onClick={addHint}
+                className="flex-1 py-2 border border-dashed border-amber-500/30 rounded-lg text-xs text-amber-500/70 hover:border-amber-500 hover:text-amber-400 transition-colors">
+                + Add Hint
+              </button>
+            </div>
+          </div>
+
+          {/* Section 3 — Unlock Method */}
+          <div className="space-y-3">
+            <SectionTitle>Unlock Method</SectionTitle>
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                { value: 'GPS_PROXIMITY' as const, label: '📍 Arrive' },
+                { value: 'PASSWORD' as const, label: '🔑 Password' },
+                { value: 'PHOTO' as const, label: '📸 Photo' },
+              ]).map((opt) => (
+                <button key={opt.value} type="button" onClick={() => setUnlockType(opt.value)}
+                  className={`py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
+                    unlockType === opt.value
+                      ? 'bg-accent text-black'
+                      : 'bg-surface-2 text-text-muted border border-border hover:border-accent/50'
+                  }`}
+                >{opt.label}</button>
+              ))}
+            </div>
+            {unlockType === 'PASSWORD' && (
+              <div className="space-y-2">
+                <p className="text-xs text-text-muted">Accepted answers (case-insensitive)</p>
+                {answers.map((a, i) => (
+                  <div key={i} className="flex gap-2">
+                    <input value={a.answer} onChange={(e) => updateAnswer(i, e.target.value)}
+                      placeholder="e.g. clocktower"
+                      className="flex-1 bg-surface-2 border border-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent" />
+                    <button type="button" onClick={() => removeAnswer(i)}
+                      className="text-red-400 hover:text-red-300 px-2">✕</button>
+                  </div>
+                ))}
+                <button type="button"
+                  onClick={() => setAnswers((a) => [...a, { answer: '' }])}
+                  className="w-full py-2 border border-dashed border-border rounded-lg text-xs text-text-muted hover:border-accent hover:text-accent transition-colors">
+                  + Add Answer
+                </button>
+                <p className="text-xs text-text-faint">
+                  Players within 2 letters of an answer see &ldquo;Almost! Check your spelling&rdquo;
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Section 4 — Points & extras */}
+          <div className="space-y-3">
+            <SectionTitle>Points & Details</SectionTitle>
+            <div className="flex items-end gap-4">
+              <div className="w-28">
+                <Label>Points</Label>
+                <input type="number" min="0" value={points}
+                  onChange={(e) => setPoints(e.target.value)} className={inputCls} placeholder="10" />
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer mb-0.5 select-none">
+                <input type="checkbox" checked={isBonus} onChange={(e) => setIsBonus(e.target.checked)}
+                  className="w-4 h-4 rounded accent-amber-400" />
+                <span className="text-sm text-text-muted">Bonus stop</span>
+              </label>
+            </div>
+            <div>
+              <Label>Unlock Message</Label>
+              <input type="text" value={unlockMessage} onChange={(e) => setUnlockMessage(e.target.value)}
+                className={inputCls} placeholder="Shown to players when they unlock this stop" />
+            </div>
+            <div>
+              <Label>Sponsor</Label>
+              <select value={sponsorId} onChange={(e) => setSponsorId(e.target.value)}
+                className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent transition-colors cursor-pointer">
+                <option value="" className="bg-surface">No sponsor</option>
+                {sponsors.map((s) => (
+                  <option key={s.id} value={s.id} className="bg-surface">{s.businessName}</option>
                 ))}
               </select>
             </div>
           </div>
 
-          {/* Description */}
-          <div>
-            <Label required>Description / Riddle</Label>
-            <textarea
-              value={form.description}
-              onChange={(e) => update('description', e.target.value)}
-              className={`${inputCls} resize-none`}
-              rows={3}
-              placeholder="Describe the clue or write the riddle players must solve…"
-            />
-          </div>
-
-          {/* Answer — only for riddles and QR */}
-          {showAnswer && (
-            <div>
-              <Label>Answer</Label>
-              <input
-                type="text"
-                value={form.answer}
-                onChange={(e) => update('answer', e.target.value)}
-                className={inputCls}
-                placeholder="The correct answer players must submit"
-              />
-            </div>
-          )}
-
-          {/* Image URL — for image/photo types */}
-          {showImage && (
-            <div>
-              <Label>Image URL</Label>
-              <input
-                type="url"
-                value={form.imageUrl}
-                onChange={(e) => update('imageUrl', e.target.value)}
-                className={inputCls}
-                placeholder="https://…"
-              />
-            </div>
-          )}
-
-          {/* Hint */}
-          <div>
-            <Label>Hint (optional)</Label>
-            <input
-              type="text"
-              value={form.hintText}
-              onChange={(e) => update('hintText', e.target.value)}
-              className={inputCls}
-              placeholder="A nudge shown when players ask for help"
-            />
-          </div>
-
-          {/* Coordinates */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label required>Latitude</Label>
-              <input
-                type="number"
-                step="any"
-                value={form.lat}
-                onChange={(e) => update('lat', e.target.value)}
-                className={inputCls}
-                placeholder="41.6938"
-              />
-            </div>
-            <div>
-              <Label required>Longitude</Label>
-              <input
-                type="number"
-                step="any"
-                value={form.lng}
-                onChange={(e) => update('lng', e.target.value)}
-                className={inputCls}
-                placeholder="44.8015"
-              />
-            </div>
-          </div>
-
-          {/* Proximity radius — GPS only */}
-          {showRadius && (
-            <div>
-              <Label>Proximity Radius (metres)</Label>
-              <input
-                type="number"
-                min="5"
-                max="5000"
-                value={form.proximityRadiusMeters}
-                onChange={(e) => update('proximityRadiusMeters', e.target.value)}
-                className={inputCls}
-                placeholder="50"
-              />
-            </div>
-          )}
-
-          {/* Points + bonus row */}
-          <div className="flex items-end gap-4">
-            <div className="w-28">
-              <Label>Points</Label>
-              <input
-                type="number"
-                min="0"
-                value={form.points}
-                onChange={(e) => update('points', e.target.value)}
-                className={inputCls}
-                placeholder="10"
-              />
-            </div>
-            <label className="flex items-center gap-2 cursor-pointer mb-0.5 select-none">
-              <input
-                type="checkbox"
-                checked={form.isBonus}
-                onChange={(e) => update('isBonus', e.target.checked)}
-                className="w-4 h-4 rounded accent-amber-400"
-              />
-              <span className="text-sm text-text-muted">Bonus clue</span>
-            </label>
-          </div>
-
-          {/* Unlock message */}
-          <div>
-            <Label>Unlock Message</Label>
-            <input
-              type="text"
-              value={form.unlockMessage}
-              onChange={(e) => update('unlockMessage', e.target.value)}
-              className={inputCls}
-              placeholder="Shown to players when they unlock this clue"
-            />
-          </div>
-
-          {/* Sponsor selector */}
-          <div>
-            <Label>Sponsor</Label>
-            <select
-              value={form.sponsorId}
-              onChange={(e) => update('sponsorId', e.target.value)}
-              className={selectCls}
-            >
-              <option value="" className="bg-surface">No sponsor</option>
-              {sponsors.map((s) => (
-                <option key={s.id} value={s.id} className="bg-surface">
-                  {s.businessName}
-                </option>
-              ))}
-            </select>
-            {sponsors.length === 0 && (
-              <p className="text-[10px] text-text-faint mt-1">
-                No active sponsors yet — add one in the Sponsors section
-              </p>
-            )}
-          </div>
-
           {/* Action row */}
           <div className="flex items-center justify-between pt-2 border-t border-border">
             <div className="flex items-center gap-3">
-              <button
-                type="submit"
-                disabled={loading}
-                className="
-                  bg-accent hover:bg-accent-hover text-black font-semibold text-sm
-                  px-6 py-2.5 rounded-lg transition-colors
-                  disabled:opacity-50 disabled:cursor-not-allowed
-                "
-              >
-                {loading ? 'Saving…' : isEdit ? 'Save Changes' : 'Add Clue'}
+              <button type="submit" disabled={loading}
+                className="bg-accent hover:bg-accent-hover text-black font-semibold text-sm px-6 py-2.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                {loading ? 'Saving…' : isEdit ? 'Save Changes' : 'Add Stop'}
               </button>
-              <button
-                type="button"
-                onClick={onClose}
-                className="text-sm text-text-muted hover:text-white transition-colors"
-              >
+              <button type="button" onClick={onClose}
+                className="text-sm text-text-muted hover:text-white transition-colors">
                 Cancel
               </button>
             </div>
-
-            {/* Delete — edit mode only */}
             {isEdit && (
-              <button
-                type="button"
-                onClick={handleDelete}
-                disabled={deleting}
-                className="
-                  text-sm text-red-400 hover:text-red-300 transition-colors
-                  disabled:opacity-50 disabled:cursor-not-allowed
-                "
-              >
+              <button type="button" onClick={handleDelete} disabled={deleting}
+                className="text-sm text-red-400 hover:text-red-300 transition-colors disabled:opacity-50">
                 {deleting ? 'Deleting…' : 'Delete'}
               </button>
             )}
