@@ -74,7 +74,7 @@ export default async function RootPage() {
       </nav>
 
       {/* Hero */}
-      <section className="relative flex min-h-[calc(100vh-3.5rem)] flex-col items-center justify-start overflow-hidden px-6 pb-12 pt-16 text-center md:pt-20">
+      <section className="relative flex min-h-[calc(100vh-3.5rem)] flex-col items-center justify-start overflow-hidden px-6 pb-8 pt-10 text-center md:pt-12">
         <div
           className="pointer-events-none absolute inset-0"
           style={{
@@ -84,35 +84,38 @@ export default async function RootPage() {
         />
 
         <div className="relative z-10 flex w-full max-w-5xl flex-col items-center">
-          <p className="mb-4 text-[11px] font-medium uppercase tracking-[0.28em] text-amber-400/70">
+          <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.24em] text-amber-400/70">
             Location-Based Scavenger Hunts
           </p>
-          <h1 className="mb-4 text-4xl font-bold leading-[0.95] tracking-tight text-white sm:text-5xl md:text-[5rem]">
+          <h1
+            className="mb-3 font-bold leading-[0.92] tracking-tight text-white"
+            style={{ fontSize: 'clamp(3.2rem, 7vw, 4.8rem)' }}
+          >
             Explore the City
             <br />
             Find Clues
             <br />
             <span className="text-amber-400">Win Prizes</span>
           </h1>
-          <p className="mx-auto mb-6 max-w-2xl text-base leading-relaxed text-white/50 sm:text-lg">
+          <p className="mx-auto mb-4 max-w-2xl text-base leading-relaxed text-white/50">
             Location-based scavenger hunts that turn tourists into locals - and locals into explorers.
           </p>
           {featuredHunts.length > 0 && (
-            <div className="mb-6 grid w-full max-w-4xl grid-cols-1 gap-3 text-left md:grid-cols-3">
+            <div className="mb-4 grid w-full max-w-4xl grid-cols-1 gap-2.5 text-left md:grid-cols-3">
               {featuredHunts.map((hunt) => (
                 <Link
                   key={hunt.id}
                   href={`/discover/${hunt.slug}`}
-                  className="group rounded-2xl border border-white/10 bg-white/[0.03] p-4 transition-colors hover:border-amber-400/30 hover:bg-white/[0.05]"
+                  className="group rounded-xl border border-white/10 bg-white/[0.03] p-3 transition-colors hover:border-amber-400/30 hover:bg-white/[0.05]"
                 >
-                  <p className="mb-2 text-[10px] font-medium uppercase tracking-widest text-amber-400/70">
+                  <p className="mb-1.5 text-[10px] font-medium uppercase tracking-widest text-amber-400/70">
                     {hunt.city}
                     {hunt.region ? `, ${hunt.region}` : ''}
                   </p>
-                  <h3 className="mb-3 text-base font-semibold leading-snug text-white transition-colors group-hover:text-amber-400">
+                  <h3 className="mb-2 text-[1rem] font-semibold leading-snug text-white transition-colors group-hover:text-amber-400">
                     {hunt.title}
                   </h3>
-                  <div className="mb-3 flex flex-wrap items-center gap-2">
+                  <div className="mb-2 flex flex-wrap items-center gap-1.5">
                     <span
                       className={`rounded-full px-2.5 py-1 text-[10px] font-medium uppercase tracking-widest ${
                         DIFFICULTY_STYLES[hunt.difficulty] ?? 'text-white/40 bg-white/5'
@@ -131,7 +134,7 @@ export default async function RootPage() {
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center justify-between text-xs text-white/40">
+                  <div className="flex items-center justify-between text-[12px] text-white/40">
                     <span>
                       {hunt.clueCount} clue{hunt.clueCount !== 1 ? 's' : ''}
                     </span>
@@ -143,7 +146,7 @@ export default async function RootPage() {
               ))}
             </div>
           )}
-          <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
+          <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link
               href="/discover"
               className="rounded-full bg-amber-400 px-8 py-3.5 text-sm font-semibold text-black transition-colors hover:bg-amber-300"
@@ -151,7 +154,7 @@ export default async function RootPage() {
               Browse All Hunts →
             </Link>
           </div>
-          <div className="mt-5 flex flex-col items-center justify-center gap-3 sm:flex-row">
+          <div className="mt-3 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link
               href={APP_STORE_URL}
               target="_blank"
