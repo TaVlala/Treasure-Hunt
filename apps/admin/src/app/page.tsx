@@ -1,7 +1,5 @@
-// Public landing page - server component.
-// Bold, editorial, premium tourism aesthetic for the Treasure Hunt platform.
-
 import Link from 'next/link';
+import type { Hunt, PaginatedData } from '@treasure-hunt/shared';
 
 const APP_STORE_URL =
   process.env['NEXT_PUBLIC_APP_STORE_URL'] ??
@@ -11,7 +9,42 @@ const PLAY_STORE_URL =
   process.env['NEXT_PUBLIC_PLAY_STORE_URL'] ??
   'https://play.google.com/store/search?q=Treasure%20Hunt&c=apps';
 
-export default function RootPage() {
+const PUBLIC_API = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001';
+
+type HuntWithCount = Hunt & { clueCount: number };
+
+const DIFFICULTY_STYLES: Record<string, string> = {
+  easy: 'text-green-400 bg-green-400/10',
+  medium: 'text-amber-400 bg-amber-400/10',
+  hard: 'text-red-400 bg-red-400/10',
+};
+
+async function fetchFeaturedHunts(): Promise<HuntWithCount[]> {
+  try {
+    const res = await fetch(`${PUBLIC_API}/api/v1/public/hunts?pageSize=3`, {
+      cache: 'no-store',
+    });
+    if (!res.ok) return [];
+
+    const json = (await res.json()) as { data: PaginatedData<HuntWithCount> };
+    return json.data.items.slice(0, 3);
+  } catch {
+    return [];
+  }
+}
+
+function formatPrice(cents: number | null, currency: string): string {
+  if (cents === null || cents === 0) return 'Free';
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: currency || 'USD',
+    minimumFractionDigits: 0,
+  }).format(cents / 100);
+}
+
+export default async function RootPage() {
+  const featuredHunts = await fetchFeaturedHunts();
+
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#0a0a0a' }}>
       {/* Sticky Nav */}
@@ -64,12 +97,58 @@ export default function RootPage() {
           <p className="mx-auto mb-10 max-w-md text-lg leading-relaxed text-white/50">
             Location-based scavenger hunts that turn tourists into locals - and locals into explorers.
           </p>
+          {featuredHunts.length > 0 && (
+            <div className="mb-10 grid w-full max-w-5xl grid-cols-1 gap-3 text-left sm:grid-cols-2 xl:grid-cols-3">
+              {featuredHunts.map((hunt) => (
+                <Link
+                  key={hunt.id}
+                  href={`/discover/${hunt.slug}`}
+                  className="group rounded-2xl border border-white/10 bg-white/[0.03] p-4 transition-colors hover:border-amber-400/30 hover:bg-white/[0.05]"
+                >
+                  <p className="mb-2 text-[10px] font-medium uppercase tracking-widest text-amber-400/70">
+                    {hunt.city}
+                    {hunt.region ? `, ${hunt.region}` : ''}
+                  </p>
+                  <h3 className="mb-3 text-base font-semibold leading-snug text-white transition-colors group-hover:text-amber-400">
+                    {hunt.title}
+                  </h3>
+                  <div className="mb-3 flex flex-wrap items-center gap-2">
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-[10px] font-medium uppercase tracking-widest ${
+                        DIFFICULTY_STYLES[hunt.difficulty] ?? 'text-white/40 bg-white/5'
+                      }`}
+                    >
+                      {hunt.difficulty}
+                    </span>
+                    {hunt.teamMode !== 'solo' && (
+                      <span className="rounded-full bg-blue-400/10 px-2.5 py-1 text-[10px] font-medium uppercase tracking-widest text-blue-400">
+                        Team
+                      </span>
+                    )}
+                    {hunt.huntType === 'paid' && (
+                      <span className="rounded-full bg-amber-400/10 px-2.5 py-1 text-[10px] font-medium uppercase tracking-widest text-amber-400">
+                        Paid
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-white/40">
+                    <span>
+                      {hunt.clueCount} clue{hunt.clueCount !== 1 ? 's' : ''}
+                    </span>
+                    <span className="font-medium text-white/60">
+                      {formatPrice(hunt.ticketPriceCents, hunt.currency)}
+                    </span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
           <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
             <Link
               href="/discover"
               className="rounded-full bg-amber-400 px-8 py-3.5 text-sm font-semibold text-black transition-colors hover:bg-amber-300"
             >
-              Browse Hunts →
+              Browse All Hunts →
             </Link>
           </div>
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
