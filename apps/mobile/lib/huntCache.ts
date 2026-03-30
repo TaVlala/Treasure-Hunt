@@ -1,6 +1,9 @@
 // huntCache — offline bundle cache for active hunt clues.
 // Stores the full clue list keyed by huntId in AsyncStorage.
 // Stale after CACHE_TTL_MS (24 hours).
+// v2: ClueWithSponsor from @treasure-hunt/shared already includes unlockType,
+// locationHidden, and contents fields. Optional chaining in consumers ensures
+// old cached bundles (missing v2 fields) degrade gracefully.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { ClueWithSponsor } from '@treasure-hunt/shared';
