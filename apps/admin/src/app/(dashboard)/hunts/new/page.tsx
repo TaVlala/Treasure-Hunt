@@ -731,6 +731,7 @@ export default function NewHuntPage() {
         method: 'POST',
         body: JSON.stringify(payload),
       });
+      router.refresh(); // invalidate server component cache so new hunt appears
       router.push('/hunts');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create hunt');
