@@ -4,7 +4,11 @@
 
 import { cookies } from 'next/headers';
 
-const SERVER_API = process.env['API_URL'] ?? 'http://localhost:3001';
+// API_URL for server-side calls; fall back to NEXT_PUBLIC_API_URL (available on both sides in Next.js)
+const SERVER_API =
+  process.env['API_URL'] ??
+  process.env['NEXT_PUBLIC_API_URL']?.replace('/api/v1', '') ??
+  'http://localhost:3001';
 
 // Fetches data from the backend using the admin_token cookie.
 // Returns null on auth error or network failure — callers render fallback UI.
