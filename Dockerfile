@@ -20,5 +20,5 @@ COPY apps/server ./apps/server
 RUN npx prisma generate --schema=apps/server/prisma/schema.prisma
 RUN npm run build --workspace=apps/server
 
-# Start
-CMD ["node", "apps/server/dist/apps/server/src/index.js"]
+# Start — run migration then boot server
+CMD ["sh", "-c", "npx prisma migrate deploy --schema=apps/server/prisma/schema.prisma && node apps/server/dist/apps/server/src/index.js"]
