@@ -1,5 +1,6 @@
 // Active hunt screen — live GPS tracking toward current clue.
 // Supports GPS proximity unlock, QR code scanning, text riddle, photo challenge, image clue, hint reveal, and hunt completion.
+// v2: adds multi-content clues, hints section, PASSWORD unlock, hidden pins, and CLUE_FIRST start mode.
 // Receives sessionId + huntId as search params from the detail screen on join/resume.
 
 import {
@@ -32,6 +33,15 @@ import type {
   SessionWithProgress,
   SubmitClueResult,
 } from '@treasure-hunt/shared';
+import type { AnswerCheckResult, ClueContent, HuntStartMode, UnlockType } from '@/lib/huntTypes';
+
+// Extended types for v2 fields not yet in the shared package
+type ClueV2 = ClueWithSponsor & {
+  unlockType?: UnlockType;
+  locationHidden?: boolean;
+  contents?: ClueContent[];
+};
+type HuntV2 = Hunt & { startMode?: HuntStartMode };
 
 // ---------------------------------------------------------------------------
 // Design tokens
@@ -93,8 +103,8 @@ function ProximityRing({
   useEffect(() => {
     const anim = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulse, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.sine), useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 0.85, duration: 900, easing: Easing.inOut(Easing.sine), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0.85, duration: 900, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
       ]),
     );
     anim.start();
@@ -109,8 +119,8 @@ function ProximityRing({
     if (isNearby) {
       const expandAnim = Animated.loop(
         Animated.sequence([
-          Animated.timing(outerPulse, { toValue: 1.4, duration: 800, easing: Easing.inOut(Easing.sine), useNativeDriver: true }),
-          Animated.timing(outerPulse, { toValue: 1, duration: 800, easing: Easing.inOut(Easing.sine), useNativeDriver: true }),
+          Animated.timing(outerPulse, { toValue: 1.4, duration: 800, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+          Animated.timing(outerPulse, { toValue: 1, duration: 800, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
         ]),
       );
       expandAnim.start();
@@ -172,9 +182,9 @@ export default function ActiveHuntScreen() {
   const router = useRouter();
 
   // Session + clue state
-  const [hunt, setHunt] = useState<Hunt | null>(null);
+  const [hunt, setHunt] = useState<HuntV2 | null>(null);
   const [session, setSession] = useState<SessionWithProgress | null>(null);
-  const [currentClue, setCurrentClue] = useState<ClueWithSponsor | null>(null);
+  const [currentClue, setCurrentClue] = useState<ClueV2 | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -199,18 +209,29 @@ export default function ActiveHuntScreen() {
   // Photo challenge state
   const [photoTaken, setPhotoTaken] = useState(false);
 
+  // v2: PASSWORD unlock answer input + fuzzy feedback
+  const [passwordInput, setPasswordInput] = useState('');
+  const [answerFeedback, setAnswerFeedback] = useState<{ type: 'close' | 'wrong'; msg: string } | null>(null);
+  const [isCheckingAnswer, setIsCheckingAnswer] = useState(false);
+
+  // v2: expandable hints from clue.contents
+  const [revealedHints, setRevealedHints] = useState<Set<string>>(new Set());
+
+  // v2: CLUE_FIRST start mode — show clue first, collapse map until player taps
+  const [showMapForClueFirst, setShowMapForClueFirst] = useState(false);
+
   // Achievement toast state
   const [achievementToast, setAchievementToast] = useState<{ name: string; icon: string } | null>(null);
   const toastAnim = useRef(new Animated.Value(0)).current;
 
   // Offline bundle cache — populated on mount from AsyncStorage or network
-  const bundleClues = useRef<ClueWithSponsor[]>([]);
+  const bundleClues = useRef<ClueV2[]>([]);
 
   // ---------------------------------------------------------------------------
   // Bundle helper — finds a clue from the in-memory bundle ref by id
   // ---------------------------------------------------------------------------
   const getClueFromBundle = useCallback(
-    (clueId: string): ClueWithSponsor | undefined =>
+    (clueId: string): ClueV2 | undefined =>
       bundleClues.current.find((c) => c.id === clueId),
     [],
   );
@@ -261,7 +282,7 @@ export default function ActiveHuntScreen() {
           // Use bundle clue when available; fall back to individual network fetch
           const bundledClue = getClueFromBundle(unlockedProgress.clueId);
           const clue = bundledClue
-            ?? await playerFetch<ClueWithSponsor>(
+            ?? await playerFetch<ClueV2>(
                 `/api/v1/player/hunts/${huntId}/clues/${unlockedProgress.clueId}`,
               ).catch(() => null);
           setCurrentClue(clue);
@@ -290,7 +311,9 @@ export default function ActiveHuntScreen() {
   }, []);
 
   useEffect(() => {
+    // v2: skip GPS tracking when locationHidden flag is set
     if (!locationGranted || !currentClue) return;
+    if (currentClue.locationHidden) return;
 
     void (async () => {
       locationSub.current = await Location.watchPositionAsync(
@@ -316,6 +339,11 @@ export default function ActiveHuntScreen() {
     setShowQR(false);
     setAnswerInput('');
     setPhotoTaken(false);
+    // v2 resets
+    setPasswordInput('');
+    setAnswerFeedback(null);
+    setRevealedHints(new Set());
+    setShowMapForClueFirst(false);
   }, [currentClue?.id]);
 
   // ---------------------------------------------------------------------------
@@ -347,12 +375,12 @@ export default function ActiveHuntScreen() {
       // Load full clue data (with sponsor) for the next clue — bundle-first
       const nextClue = result.nextClue
         ? (getClueFromBundle(result.nextClue.id) ??
-            await playerFetch<ClueWithSponsor>(
+            await playerFetch<ClueV2>(
               `/api/v1/player/hunts/${huntId}/clues/${result.nextClue.id}`,
-            ).catch(() => ({ ...result.nextClue!, sponsor: null }) as ClueWithSponsor))
+            ).catch(() => ({ ...result.nextClue!, sponsor: null }) as ClueV2))
         : null;
 
-      setSession(result.session);
+      setSession(result.session as unknown as SessionWithProgress);
       setCurrentClue(nextClue);
     } catch (e) {
       Alert.alert('Error', e instanceof Error ? e.message : 'Submit failed', [{ text: 'OK' }]);
@@ -361,6 +389,36 @@ export default function ActiveHuntScreen() {
       setIsSubmitting(false);
     }
   }, [currentClue, session, sessionId, huntId, router, getClueFromBundle, answerInput, showAchievementToast]);
+
+  // ---------------------------------------------------------------------------
+  // v2: PASSWORD unlock — fuzzy answer check endpoint
+  // ---------------------------------------------------------------------------
+  const onCheckPasswordAnswer = useCallback(async () => {
+    if (!currentClue || !huntId || passwordInput.trim().length === 0) return;
+    setIsCheckingAnswer(true);
+    setAnswerFeedback(null);
+    try {
+      const result = await playerFetch<AnswerCheckResult>(
+        `/api/v1/game/hunts/${huntId}/clues/${currentClue.id}/check-answer`,
+        { method: 'POST', body: JSON.stringify({ answer: passwordInput }) },
+      );
+      if (result.result === 'correct') {
+        // Treat correct password like a GPS arrival — run the standard submit flow
+        setPasswordInput('');
+        void onSubmit('gps');
+      } else if (result.result === 'close') {
+        setAnswerFeedback({ type: 'close', msg: result.message });
+        setPasswordInput('');
+      } else {
+        setAnswerFeedback({ type: 'wrong', msg: result.message });
+        setPasswordInput('');
+      }
+    } catch (e) {
+      Alert.alert('Error', e instanceof Error ? e.message : 'Could not check answer', [{ text: 'OK' }]);
+    } finally {
+      setIsCheckingAnswer(false);
+    }
+  }, [currentClue, huntId, passwordInput, onSubmit]);
 
   // ---------------------------------------------------------------------------
   // Hint reveal
@@ -510,6 +568,23 @@ export default function ActiveHuntScreen() {
   const canSubmitAnswer = isTextRiddle && answerInput.trim().length > 0 && !isSubmitting;
   const canSubmitPhoto = isPhotoChallenge && photoTaken && withinRange && !isSubmitting;
 
+  // v2 derived state
+  // Unlock type — GPS_PROXIMITY is the legacy default
+  const unlockType = currentClue.unlockType ?? 'GPS_PROXIMITY';
+  const isPasswordUnlock = unlockType === 'PASSWORD';
+  const isPhotoUnlock = unlockType === 'PHOTO';
+  // Location hidden: use the locationHidden flag (server hides coordinates until arrival)
+  const locationHidden = currentClue.locationHidden ?? false;
+  // Multi-content items — sorted by order, split into clue content vs hints
+  const sortedContents = (currentClue.contents ?? []).slice().sort((a, b) => a.order - b.order);
+  const clueContentItems = sortedContents.filter((c) => !c.isHint);
+  const hintContentItems = sortedContents.filter((c) => c.isHint);
+  const hasContentItems = clueContentItems.length > 0;
+  const hasHintItems = hintContentItems.length > 0;
+  // CLUE_FIRST mode — only affects first clue display
+  const isClueFirst = hunt?.startMode === 'CLUE_FIRST' && clueIndex === 0;
+  const canSubmitPassword = isPasswordUnlock && passwordInput.trim().length > 0 && !isCheckingAnswer && !isSubmitting;
+
   return (
     <SafeAreaView style={styles.root}>
       {/* Achievement toast — absolutely positioned, non-interactive */}
@@ -556,30 +631,52 @@ export default function ActiveHuntScreen() {
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
-        {/* GPS proximity ring (hidden for QR clues) */}
-        {!isQRClue && (
-          <>
-            <View style={styles.ringContainer}>
-              <ProximityRing distanceMeters={distanceMeters} radiusMeters={currentClue.proximityRadiusMeters} accent={accent} />
-              {dist ? (
-                <View style={styles.distanceBlock}>
-                  <Text style={[styles.distanceValue, { color: distColor }]}>{dist.value}</Text>
-                  <Text style={[styles.distanceUnit, { color: distColor }]}>{dist.unit}</Text>
-                </View>
-              ) : (
-                <View style={styles.distanceBlock}>
-                  <ActivityIndicator color={MUTED} size="small" />
-                  <Text style={styles.gpsLabel}>Getting GPS...</Text>
+        {/* v2 CLUE_FIRST: show clue prominently at the top, map collapsed until player taps */}
+        {isClueFirst && !showMapForClueFirst && (
+          <View style={styles.clueFirstBanner}>
+            <Text style={styles.clueFirstLabel}>Read the clue first</Text>
+            <TouchableOpacity
+              style={[styles.clueFirstMapBtn, { borderColor: accent + '66' }]}
+              onPress={() => setShowMapForClueFirst(true)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.clueFirstMapBtnText, { color: accent }]}>Show Map →</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* GPS proximity ring — hidden for QR clues, hidden-location clues, and CLUE_FIRST when map is collapsed */}
+        {!isQRClue && !isPasswordUnlock && !isPhotoUnlock && (!isClueFirst || showMapForClueFirst) && (
+          locationHidden ? (
+            <View style={styles.hiddenLocationBlock}>
+              <Text style={styles.hiddenLocationText}>
+                {'📍 Location will be revealed when you arrive — follow the clue above'}
+              </Text>
+            </View>
+          ) : (
+            <>
+              <View style={styles.ringContainer}>
+                <ProximityRing distanceMeters={distanceMeters} radiusMeters={currentClue.proximityRadiusMeters} accent={accent} />
+                {dist ? (
+                  <View style={styles.distanceBlock}>
+                    <Text style={[styles.distanceValue, { color: distColor }]}>{dist.value}</Text>
+                    <Text style={[styles.distanceUnit, { color: distColor }]}>{dist.unit}</Text>
+                  </View>
+                ) : (
+                  <View style={styles.distanceBlock}>
+                    <ActivityIndicator color={MUTED} size="small" />
+                    <Text style={styles.gpsLabel}>Getting GPS...</Text>
+                  </View>
+                )}
+                <Text style={styles.radiusLabel}>Within {currentClue.proximityRadiusMeters}m to unlock</Text>
+              </View>
+              {withinRange && (
+                <View style={styles.inRangeBanner}>
+                  <Text style={styles.inRangeText}>✓ You're in range!</Text>
                 </View>
               )}
-              <Text style={styles.radiusLabel}>Within {currentClue.proximityRadiusMeters}m to unlock</Text>
-            </View>
-            {withinRange && (
-              <View style={styles.inRangeBanner}>
-                <Text style={styles.inRangeText}>✓ You're in range!</Text>
-              </View>
-            )}
-          </>
+            </>
+          )
         )}
 
         {/* QR prompt (shown for QR clues) */}
@@ -606,14 +703,34 @@ export default function ActiveHuntScreen() {
           <Text style={styles.clueTitle}>{currentClue.title}</Text>
           <Text style={styles.clueDesc}>{currentClue.description}</Text>
 
-          {/* IMAGE clue — show image above description */}
-          {isImageClue && currentClue.imageUrl ? (
-            <Image
-              source={{ uri: currentClue.imageUrl }}
-              style={styles.clueImage}
-              resizeMode="contain"
-            />
-          ) : null}
+          {/* v2: multi-content items (TEXT + IMAGE blocks) — shown when contents array is populated */}
+          {hasContentItems ? (
+            <View style={styles.contentItemsBlock}>
+              {clueContentItems.map((item) =>
+                item.type === 'IMAGE' && item.imageUrl ? (
+                  <Image
+                    key={item.id}
+                    source={{ uri: item.imageUrl }}
+                    style={styles.clueImage}
+                    resizeMode="contain"
+                  />
+                ) : item.type === 'TEXT' && item.content ? (
+                  <Text key={item.id} style={styles.clueText}>{item.content}</Text>
+                ) : null,
+              )}
+            </View>
+          ) : (
+            <>
+              {/* Backwards compat: legacy IMAGE clue — show imageUrl when no contents array */}
+              {isImageClue && currentClue.imageUrl ? (
+                <Image
+                  source={{ uri: currentClue.imageUrl }}
+                  style={styles.clueImage}
+                  resizeMode="contain"
+                />
+              ) : null}
+            </>
+          )}
 
           {/* PHOTO CHALLENGE — show challenge prompt chip */}
           {isPhotoChallenge ? (
@@ -622,12 +739,56 @@ export default function ActiveHuntScreen() {
             </View>
           ) : null}
 
-          {currentClue.unlockMessage && (withinRange || isQRClue) && (
+          {currentClue.unlockMessage && (withinRange || isQRClue || isPasswordUnlock) && (
             <View style={[styles.unlockMsg, { backgroundColor: accent + '18', borderColor: accent + '44' }]}>
               <Text style={[styles.unlockMsgText, { color: accent }]}>💡 {currentClue.unlockMessage}</Text>
             </View>
           )}
         </View>
+
+        {/* v2: Hints section — collapsible hint items from clue.contents */}
+        {hasHintItems && (
+          <View style={styles.hintsSection}>
+            <View style={styles.hintsSectionHeader}>
+              <Text style={styles.hintsSectionTitle}>❓ Need a hint?</Text>
+            </View>
+            {hintContentItems.map((hint, idx) => {
+              const isRevealed = revealedHints.has(hint.id);
+              return (
+                <TouchableOpacity
+                  key={hint.id}
+                  style={[styles.hintCollapsible, isRevealed && styles.hintCollapsibleOpen]}
+                  onPress={() => {
+                    setRevealedHints((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(hint.id)) { next.delete(hint.id); } else { next.add(hint.id); }
+                      return next;
+                    });
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.hintCollapsibleRow}>
+                    <Text style={styles.hintCollapsibleLabel}>Hint {idx + 1}</Text>
+                    <Text style={styles.hintCollapsibleChevron}>{isRevealed ? '▲' : '▼'}</Text>
+                  </View>
+                  {isRevealed && (
+                    <View style={styles.hintCollapsibleBody}>
+                      {hint.type === 'IMAGE' && hint.imageUrl ? (
+                        <Image
+                          source={{ uri: hint.imageUrl }}
+                          style={styles.hintImage}
+                          resizeMode="contain"
+                        />
+                      ) : hint.type === 'TEXT' && hint.content ? (
+                        <Text style={styles.hintBodyText}>{hint.content}</Text>
+                      ) : null}
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
 
         {/* Sponsor strip — shown when this clue is sponsored */}
         {currentClue.sponsor && (
@@ -694,6 +855,36 @@ export default function ActiveHuntScreen() {
             />
           </View>
         )}
+
+        {/* v2: PASSWORD unlock input + feedback */}
+        {isPasswordUnlock && (
+          <View style={styles.answerBlock}>
+            <Text style={styles.answerLabel}>Enter the word or phrase</Text>
+            <TextInput
+              style={styles.answerInput}
+              value={passwordInput}
+              onChangeText={(t) => { setPasswordInput(t); setAnswerFeedback(null); }}
+              placeholder="Enter the word or phrase you found..."
+              placeholderTextColor={MUTED}
+              autoCapitalize="none"
+              returnKeyType="done"
+              onSubmitEditing={() => { void onCheckPasswordAnswer(); }}
+            />
+            {answerFeedback && (
+              <View style={[
+                styles.answerFeedback,
+                answerFeedback.type === 'close' ? styles.answerFeedbackClose : styles.answerFeedbackWrong,
+              ]}>
+                <Text style={[
+                  styles.answerFeedbackText,
+                  answerFeedback.type === 'close' ? styles.answerFeedbackTextClose : styles.answerFeedbackTextWrong,
+                ]}>
+                  {answerFeedback.type === 'close' ? '🤔 ' : '✗ '}{answerFeedback.msg}
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
       </ScrollView>
 
       {/* Submit CTA */}
@@ -707,6 +898,19 @@ export default function ActiveHuntScreen() {
             activeOpacity={0.8}
           >
             {isSubmitting ? <ActivityIndicator color="#000" /> : <Text style={styles.submitText}>Scan QR Code 📷</Text>}
+          </TouchableOpacity>
+        ) : isPasswordUnlock ? (
+          /* v2: PASSWORD unlock — submit answer button */
+          <TouchableOpacity
+            style={[styles.submitBtn, !canSubmitPassword && styles.submitBtnDisabled, canSubmitPassword && { backgroundColor: accent }]}
+            onPress={() => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); void onCheckPasswordAnswer(); }}
+            disabled={!canSubmitPassword}
+            activeOpacity={0.8}
+          >
+            {isCheckingAnswer || isSubmitting
+              ? <ActivityIndicator color={canSubmitPassword ? '#000' : MUTED} />
+              : <Text style={[styles.submitText, !canSubmitPassword && styles.submitTextDisabled]}>Submit Answer</Text>
+            }
           </TouchableOpacity>
         ) : isTextRiddle ? (
           <TouchableOpacity
@@ -879,4 +1083,58 @@ const styles = StyleSheet.create({
   toastIcon: { fontSize: 28 },
   toastLabel: { color: '#f59e0b', fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
   toastName: { color: '#ffffff', fontSize: 15, fontWeight: '700', marginTop: 2 },
+
+  // v2: hidden location placeholder
+  hiddenLocationBlock: {
+    backgroundColor: SURFACE, borderRadius: 12, borderWidth: 1, borderColor: BORDER,
+    borderStyle: 'dashed', padding: 20, alignItems: 'center', marginBottom: 16,
+  },
+  hiddenLocationText: { color: MUTED, fontSize: 14, textAlign: 'center', lineHeight: 20 },
+
+  // v2: CLUE_FIRST banner
+  clueFirstBanner: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: SURFACE2, borderRadius: 10, borderWidth: 1, borderColor: BORDER,
+    paddingHorizontal: 14, paddingVertical: 10, marginBottom: 16,
+  },
+  clueFirstLabel: { color: MUTED, fontSize: 13, fontWeight: '600' },
+  clueFirstMapBtn: {
+    paddingHorizontal: 12, paddingVertical: 5, borderRadius: 8,
+    borderWidth: 1, backgroundColor: SURFACE,
+  },
+  clueFirstMapBtnText: { fontSize: 13, fontWeight: '700' },
+
+  // v2: multi-content items block
+  contentItemsBlock: { marginTop: 10, gap: 10 },
+  clueText: { color: TEXT, fontSize: 15, lineHeight: 22 },
+
+  // v2: hints collapsible section
+  hintsSection: {
+    backgroundColor: SURFACE, borderRadius: 14, borderWidth: 1,
+    borderColor: '#F59E0B44', padding: 14, marginBottom: 12, gap: 6,
+  },
+  hintsSectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
+  hintsSectionTitle: { color: '#F59E0B', fontSize: 13, fontWeight: '700' },
+  hintCollapsible: {
+    borderRadius: 8, borderWidth: 1, borderColor: '#F59E0B33',
+    backgroundColor: SURFACE2, overflow: 'hidden',
+  },
+  hintCollapsibleOpen: { borderColor: '#F59E0B66' },
+  hintCollapsibleRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 12, paddingVertical: 10,
+  },
+  hintCollapsibleLabel: { color: '#F59E0B', fontSize: 13, fontWeight: '600' },
+  hintCollapsibleChevron: { color: '#F59E0B', fontSize: 11 },
+  hintCollapsibleBody: { paddingHorizontal: 12, paddingBottom: 10 },
+  hintBodyText: { color: TEXT, fontSize: 14, lineHeight: 20 },
+  hintImage: { width: '100%', height: 160, borderRadius: 8, backgroundColor: SURFACE },
+
+  // v2: answer feedback for PASSWORD unlock
+  answerFeedback: { marginTop: 8, borderRadius: 8, borderWidth: 1, padding: 10 },
+  answerFeedbackClose: { backgroundColor: '#78450a22', borderColor: '#F59E0B44' },
+  answerFeedbackWrong: { backgroundColor: 'rgba(239,68,68,0.12)', borderColor: 'rgba(239,68,68,0.35)' },
+  answerFeedbackText: { fontSize: 13, lineHeight: 18, fontWeight: '500' },
+  answerFeedbackTextClose: { color: '#F59E0B' },
+  answerFeedbackTextWrong: { color: '#ef4444' },
 });
